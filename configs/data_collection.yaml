@@ -1,0 +1,8 @@
+defaults:
+  - env: darkroom
+  - _self_
+
+wandb:
+  project: "transformer-rl"
+  entity: "your-username"
+  tags: ["rl", "transformer"]

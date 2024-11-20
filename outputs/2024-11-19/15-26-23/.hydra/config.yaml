@@ -1,0 +1,19 @@
+model:
+  model:
+    n_layers: 6
+    n_heads: 8
+    d_model: 512
+    d_ff: 2048
+    dropout: 0.1
+env:
+  env: darkroom
+  n_envs: 10000
+  horizon: 100
+  dim: 10
+  rollin_type: uniform
+wandb:
+  project: transformer-rl
+  entity: your-username
+  tags:
+  - rl
+  - transformer

@@ -1,0 +1,6 @@
+_target_: src.models.transformer.Transformer
+name: transformer
+n_embd: 32
+n_layer: 3
+n_head: 1
+dropout: 0

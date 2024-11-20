@@ -1,0 +1,14 @@
+defaults:
+  - model: transformer
+  - env: darkroom
+  - _self_
+
+seed: 0
+epoch: -1
+H: -1
+n_eval: 100
+
+wandb:
+  project: "transformer-rl"
+  entity: "your-username"
+  tags: ["rl", "transformer"]
