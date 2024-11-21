@@ -101,14 +101,15 @@ def main(cfg: DictConfig):
         test_trajs = generate_darkroom_histories(test_goals, env_config)
         eval_trajs = generate_darkroom_histories(eval_goals, env_config)
 
-        train_filepath = build_data_filename(env_config, mode=0)
-        test_filepath = build_data_filename(env_config, mode=1)
-        eval_filepath = build_data_filename(env_config, mode=2)
+        train_filepath = build_data_filename(
+            env_config, mode=0, storage_dir=cfg.storage_dir + '/datasets')
+        test_filepath = build_data_filename(
+            env_config, mode=1, storage_dir=cfg.storage_dir + '/datasets')
+        eval_filepath = build_data_filename(
+            env_config, mode=2, storage_dir=cfg.storage_dir + '/datasets')
     else:
         raise NotImplementedError
 
-    if not os.path.exists('pickles/datasets'):
-        os.makedirs('pickles/datasets', exist_ok=True)
     with open(train_filepath, 'wb') as file:
         pickle.dump(train_trajs, file)
         print(f"Saved to {train_filepath}.")

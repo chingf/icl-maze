@@ -4,9 +4,8 @@ defaults:
   - optimizer: default
   - _self_
 
-seed: 0
-
 wandb:
-  project: "transformer-rl"
-  entity: "your-username"
-  tags: ["rl", "transformer"]
+  project: "darkroom"
+
+seed: 0
+storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze

@@ -1,3 +1,4 @@
+import json
 import torch.multiprocessing as mp
 if mp.get_start_method(allow_none=True) is None:
     mp.set_start_method('spawn', force=True)  # or 'forkserver'
@@ -13,6 +14,11 @@ from torchvision.transforms import transforms
 import hydra
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
+import pytorch_lightning as pl
+from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.callbacks import ModelCheckpoint
+import wandb
+wandb.login()
 
 import numpy as np
 import random
@@ -35,6 +41,7 @@ def main(cfg: DictConfig):
     model_config['horizon'] = env_config['horizon']
     model_config['state_dim'] = env_config['state_dim']
     model_config['action_dim'] = env_config['action_dim']
+    model_config['optimizer_config'] = optimizer_config
     model = instantiate(model_config)
     model = model.to(device)
 
@@ -52,11 +59,13 @@ def main(cfg: DictConfig):
     random.seed(tmp_seed)
 
     # Set up directories
-    path_train = build_data_filename(env_config, mode=0)
-    path_test = build_data_filename(env_config, mode=1)
-    model_chkpt_path = build_model_filename(env_config, model_config)
-    os.makedirs(f'pickles/models/{model_chkpt_path}', exist_ok=True)
-    os.makedirs(f'figs/{model_chkpt_path}/loss', exist_ok=True)
+    path_train = build_data_filename(
+        env_config, mode=0, storage_dir=cfg.storage_dir + '/datasets')
+    path_test = build_data_filename(
+        env_config, mode=1, storage_dir=cfg.storage_dir + '/datasets')
+    model_chkpt_path = build_model_filename(
+        env_config, model_config, optimizer_config)
+    os.makedirs(f'{cfg.storage_dir}/models/{model_chkpt_path}', exist_ok=True)
 
     # Set up datasets and dataloaders
     train_dataset = Dataset(path_train, env_config)
@@ -64,92 +73,53 @@ def main(cfg: DictConfig):
     train_loader = torch.utils.data.DataLoader(
         train_dataset, optimizer_config['batch_size'], shuffle=True)
     test_loader = torch.utils.data.DataLoader(
-        test_dataset, optimizer_config['batch_size'], shuffle=True)
+        test_dataset, optimizer_config['batch_size'])
+    
+    # Set up logging and checkpointing
+    wandb_config = {
+        'env': env_config,
+        'model': model_config,
+        'optimizer': optimizer_config,
+        'seed': seed
+    }
+    wandb_logger = WandbLogger(
+        project=cfg.wandb.project,
+        name=model_chkpt_path,
+        config=wandb_config,
+        save_dir='logs'
+    )
 
-    # Set up optimizer and loss function
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=optimizer_config['lr'],
-        weight_decay=optimizer_config['weight_decay']
-        )
-    loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')
+    # Save run ID for later evaluation
+    run_info = {
+        "run_id": wandb_logger.experiment.id,
+        "run_name": wandb_logger.experiment.name,
+        "version": wandb_logger.version  # This is the same as run_id
+    }
+    with open(f'{cfg.storage_dir}/models/{model_chkpt_path}/run_info.json', 'w') as f:
+        json.dump(run_info, f)
 
-    # Training loop
-    test_loss = []
-    train_loss = []
-    print("Num train batches: " + str(len(train_loader)))
-    print("Num test batches: " + str(len(test_loader)))
-    for epoch in range(optimizer_config['num_epochs']):
-        # EVALUATION
-        print(f"Epoch: {epoch + 1}")
-        start_time = time.time()
-        with torch.no_grad():
-            epoch_test_loss = 0.0
-            for i, batch in enumerate(test_loader):
-                print(f"Batch {i} of {len(test_loader)}", end='\r')
-                batch = {k: v.to(device) for k, v in batch.items()}
-                true_actions = batch['optimal_actions']
-                pred_actions = model(batch)
-                true_actions = true_actions.unsqueeze(
-                    1).repeat(1, pred_actions.shape[1], 1)
-                true_actions = true_actions.reshape(-1, env_config['action_dim'])
-                pred_actions = pred_actions.reshape(-1, env_config['action_dim'])
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=f'{cfg.storage_dir}/models/{model_chkpt_path}',
+        filename='{epoch}-{val_loss:.2f}',
+        save_top_k=3,
+        monitor='val_loss',
+        mode='min',
+        save_last=True
+    )
 
-                loss = loss_fn(pred_actions, true_actions)
-                epoch_test_loss += loss.item() / env_config['horizon']
+    trainer = pl.Trainer(
+        max_epochs=optimizer_config['num_epochs'],
+        logger=wandb_logger,
+        callbacks=[checkpoint_callback],
+        accelerator='auto',  # TODO: maybe need to specify devices manually
+    )
 
-        test_loss.append(epoch_test_loss / len(test_dataset))
-        end_time = time.time()
-        print(f"\tTest loss: {test_loss[-1]}")
-        print(f"\tEval time: {end_time - start_time}")
-
-        # TRAINING
-        epoch_train_loss = 0.0
-        start_time = time.time()
-
-        for i, batch in enumerate(train_loader):
-            print(f"Batch {i} of {len(train_loader)}", end='\r')
-            batch = {k: v.to(device) for k, v in batch.items()}
-            true_actions = batch['optimal_actions']
-            pred_actions = model(batch)
-            true_actions = true_actions.unsqueeze(
-                1).repeat(1, pred_actions.shape[1], 1)
-            true_actions = true_actions.reshape(-1, env_config['action_dim'])
-            pred_actions = pred_actions.reshape(-1, env_config['action_dim'])
-
-            optimizer.zero_grad()
-            loss = loss_fn(pred_actions, true_actions)
-            loss.backward()
-            optimizer.step()
-            epoch_train_loss += loss.item() / env_config['horizon']
-
-        train_loss.append(epoch_train_loss / len(train_dataset))
-        end_time = time.time()
-        print(f"\tTrain loss: {train_loss[-1]}")
-        print(f"\tTrain time: {end_time - start_time}")
-
-        # LOGGING
-        if (epoch + 1) % 50 == 0:
-            torch.save(model.state_dict(),
-                       f'pickles/models/{model_chkpt_path}/epoch{epoch+1}.pt')
-
-        # PLOTTING
-        if (epoch + 1) % 10 == 0:
-            print(f"Epoch: {epoch + 1}")
-            print(f"Test Loss:        {test_loss[-1]}")
-            print(f"Train Loss:       {train_loss[-1]}")
-            print("\n")
-
-            plt.yscale('log')
-            plt.plot(train_loss[1:], label="Train Loss")
-            plt.plot(test_loss[1:], label="Test Loss")
-            plt.legend()
-            plt.savefig(f"figs/{model_chkpt_path}/loss/train_loss.png")
-            plt.clf()
-
-    torch.save(model.state_dict(), f'pickles/models/{model_chkpt_path}/final.pt')
-    print("Done.")
-
+    # Train model
+    trainer.fit(
+        model,
+        train_dataloaders=train_loader,
+        val_dataloaders=test_loader
+    )
 
 if __name__ == "__main__":
     main()

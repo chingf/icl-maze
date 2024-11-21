@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import os
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -16,15 +17,18 @@ def convert_to_tensor(x, store_gpu=True):
     else:
         return torch.tensor(np.asarray(x)).float()
     
-def build_data_filename(env_config, mode):
+def build_data_filename(env_config, mode, storage_dir=None):
     if env_config['env'] == 'darkroom':
-        return build_darkroom_data_filename(env_config, mode)
+        filename = build_darkroom_data_filename(env_config, mode)
+        if storage_dir is not None:
+            filename = os.path.join(storage_dir, filename)
+        return filename
     else:
         raise NotImplementedError
     
-def build_model_filename(env_config, model_config):
+def build_model_filename(env_config, model_config, optimizer_config):
     if env_config['env'] == 'darkroom':
-        return build_darkroom_model_filename(env_config, model_config)
+        return build_darkroom_model_filename(env_config, model_config, optimizer_config)
     else:
         raise NotImplementedError
 
@@ -33,7 +37,6 @@ def build_darkroom_data_filename(env_config, mode):
     Builds the filename for the darkroom data.
     Mode is either 0: train, 1: test, 2: eval.
     """
-    filename_template = 'pickles/datasets/{}.pkl'
     filename = env_config['env']
     filename += '_envs' + str(env_config['n_envs'])
     filename += '_H' + str(env_config['horizon'])
@@ -46,10 +49,10 @@ def build_darkroom_data_filename(env_config, mode):
         filename += '_' + env_config['rollin_type']
         filename += '_eval'
         
-    return filename_template.format(filename)
+    return filename + '.pkl'
 
 
-def build_darkroom_model_filename(env_config, model_config):
+def build_darkroom_model_filename(env_config, model_config, optimizer_config):
     """
     Builds the filename for the darkroom model.
     """
@@ -58,13 +61,13 @@ def build_darkroom_model_filename(env_config, model_config):
     env_filename += '_envs' + str(env_config['n_envs'])
     env_filename += '_H' + str(env_config['horizon'])
     env_filename += '_d' + str(env_config['dim'])
-    env_filename += '_sd' + str(env_config['state_dim'])
-    env_filename += '_ad' + str(env_config['action_dim'])   
 
     model_filename = model_config['name']
     model_filename += '_embd' + str(model_config['n_embd'])
     model_filename += '_layer' + str(model_config['n_layer'])
     model_filename += '_head' + str(model_config['n_head'])
     model_filename += '_do' + str(model_config['dropout'])
+    model_filename += '_lr' + str(optimizer_config['lr'])
+    model_filename += '_batch' + str(optimizer_config['batch_size'])
 
     return env_filename + '/' + model_filename

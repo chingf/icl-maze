@@ -1,12 +1,17 @@
 import torch
 import torch.nn as nn
+import pytorch_lightning as pl
+from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.callbacks import ModelCheckpoint
+import wandb
+import torch.multiprocessing as mp
 import transformers
 transformers.set_seed(0)
 from transformers import GPT2Config, GPT2Model
 from IPython import embed
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-class Transformer(nn.Module):
+class Transformer(pl.LightningModule):
     """Transformer class."""
 
     def __init__(
@@ -20,6 +25,7 @@ class Transformer(nn.Module):
         horizon: int,
         test: bool,
         name: str,
+        optimizer_config: dict,
         ):
 
         super(Transformer, self).__init__()
@@ -31,7 +37,8 @@ class Transformer(nn.Module):
         self.action_dim = action_dim
         self.dropout = dropout
         self.horizon = horizon
-        self.test = test    
+        self.test = test
+        self.optimizer_config = optimizer_config = optimizer_config
 
         config = GPT2Config(
             n_positions=4 * (1 + self.horizon),
@@ -47,6 +54,8 @@ class Transformer(nn.Module):
         self.embed_transition = nn.Linear(
             2 * self.state_dim + self.action_dim + 1, self.n_embd)
         self.pred_actions = nn.Linear(self.n_embd, self.action_dim)
+
+        self.loss_fn = nn.CrossEntropyLoss(reduction='sum')
 
     def forward(self, x):
         query_states = x['query_states'][:, None, :]
@@ -69,6 +78,39 @@ class Transformer(nn.Module):
             return preds[:, -1, :]
         return preds[:, 1:, :]
 
+    def batch_forward(self, batch, batch_idx):
+        pred_actions = self(batch)
+        true_actions = batch['optimal_actions']
+        
+        # Reshape predictions and targets for loss calculation
+        true_actions = true_actions.unsqueeze(1).repeat(1, pred_actions.shape[1], 1)
+        true_actions = true_actions.reshape(-1, self.action_dim)
+        pred_actions = pred_actions.reshape(-1, self.action_dim)
+        
+        loss = self.loss_fn(pred_actions, true_actions) / self.horizon
+        return loss
+
+  
+    def training_step(self, batch, batch_idx):
+        batch_size = batch['query_states'].shape[0]
+        loss = self.batch_forward(batch, batch_idx)
+        self.log('train_loss', loss/batch_size, on_epoch=True, prog_bar=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        batch_size = batch['query_states'].shape[0]
+        loss = self.batch_forward(batch, batch_idx)
+        self.log('val_loss', loss/batch_size, on_epoch=True, prog_bar=True)
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(
+            self.parameters(),
+            lr=self.optimizer_config['lr'],
+            weight_decay=self.optimizer_config['weight_decay']
+        )
+        return optimizer
+
 
 class ImageTransformer(Transformer):
     """Transformer class for image-based data."""
@@ -84,12 +126,13 @@ class ImageTransformer(Transformer):
         horizon: int,
         test: bool,
         name: str,
+        optimizer_config: dict,
         image_size: int,
         im_embd: int,
         ):
 
         super().__init__(n_embd, n_layer, n_head, state_dim, action_dim,
-                         dropout, horizon, test, name)
+                         dropout, horizon, test, name, optimizer_config)
         self.im_embd = im_embd
         size = image_size
         size = (size - 3) // 2 + 1
