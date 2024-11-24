@@ -15,11 +15,157 @@ from src.utils import convert_to_tensor
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+def deploy_online_vec_long_context(vec_env, controller, Heps, H, horizon):
+    assert H % horizon == 0
+
+    num_envs = vec_env.num_envs
+    context_states = torch.zeros(
+        (num_envs, 1, horizon, vec_env.state_dim)).float().to(device)
+    context_actions = torch.zeros(
+        (num_envs, 1, horizon, vec_env.action_dim)).float().to(device)
+    context_next_states = torch.zeros(
+        (num_envs, 1, horizon, vec_env.state_dim)).float().to(device)
+    context_rewards = torch.zeros(
+        (num_envs, 1, horizon, 1)).float().to(device)
+
+    cum_means = []
+
+    ctxt_length = 4
+    print('running long context')
+    for ep_ctxt in range(Heps):
+        # Reshape the batch as a singular length H = ctx_rollouts * horizon sequence.
+        if False: #context_states.shape[1] > ctxt_length:
+            start_idx = context_states.shape[1] - ctxt_length
+        else:
+            start_idx = 0
+        _context_states = context_states[:, start_idx:, :, :]
+        _context_actions = context_actions[:, start_idx:, :, :]
+        _context_next_states = context_next_states[:, start_idx:, :, :]
+        _context_rewards = context_rewards[:, start_idx:, :, :]
+        batch = { 
+            'context_states': _context_states.reshape(num_envs, -1, vec_env.state_dim),
+            'context_actions': _context_actions.reshape(num_envs, -1, vec_env.action_dim),
+            'context_next_states': _context_next_states.reshape(num_envs, -1, vec_env.state_dim),
+            'context_rewards': _context_rewards.reshape(num_envs, -1, 1),
+        }
+        controller.set_batch(batch)
+        states_lnr, actions_lnr, next_states_lnr, rewards_lnr = vec_env.deploy_eval(
+            controller)  # Deploy controller in environment for HORIZON steps
+        mean = np.sum(rewards_lnr, axis=-1)
+        cum_means.append(mean)
+
+        # Convert to torch
+        states_lnr = convert_to_tensor(states_lnr)  # (n_envs, horizon, state_dim)
+        actions_lnr = convert_to_tensor(actions_lnr)
+        next_states_lnr = convert_to_tensor(next_states_lnr)
+        rewards_lnr = convert_to_tensor(rewards_lnr[:, :, None])
+
+        # Roll in new data by shifting the batch and appending the new data.
+        if ep_ctxt == 0:
+            context_states = states_lnr[:, None, :, :]
+            context_actions = actions_lnr[:, None, :, :]
+            context_next_states = next_states_lnr[:, None, :, :]
+            context_rewards = rewards_lnr[:, None, :, :]
+        else:
+            context_states = torch.cat(
+                (context_states, states_lnr[:, None, :, :]), dim=1)
+            context_actions = torch.cat(
+                (context_actions, actions_lnr[:, None, :, :]), dim=1)
+            context_next_states = torch.cat(
+                (context_next_states, next_states_lnr[:, None, :, :]), dim=1)
+            context_rewards = torch.cat(
+                (context_rewards, rewards_lnr[:, None, :, :]), dim=1)
+
+    return np.stack(cum_means, axis=1)
+
+
+def deploy_online_vec_random_buffer(vec_env, controller, Heps, H, horizon):
+    assert H % horizon == 0
+
+    num_envs = vec_env.num_envs
+    context_states = torch.zeros(
+        (num_envs, 1, horizon, vec_env.state_dim)).float().to(device)
+    context_actions = torch.zeros(
+        (num_envs, 1, horizon, vec_env.action_dim)).float().to(device)
+    context_next_states = torch.zeros(
+        (num_envs, 1, horizon, vec_env.state_dim)).float().to(device)
+    context_rewards = torch.zeros(
+        (num_envs, 1, horizon, 1)).float().to(device)
+
+    cum_means = []
+
+    for ep_ctxt in range(Heps):
+        # Reshape the batch as a singular length H = ctx_rollouts * horizon sequence.
+        _context_states = context_states.reshape(num_envs, -1, vec_env.state_dim)
+        _context_actions = context_actions.reshape(num_envs, -1, vec_env.action_dim)
+        _context_next_states = context_next_states.reshape(num_envs, -1, vec_env.state_dim)
+        _context_rewards = context_rewards.reshape(num_envs, -1, 1)
+
+        # Sample 'horizon' unique random indices
+        #indices = torch.randperm(_context_states.shape[1])[:horizon*5]
+
+        # Sampling unique indices
+        horizon = 400
+        if True: #context_states.shape[1] > 1:  # Only if we have context
+            combined = torch.cat([_context_states, _context_actions], dim=-1)  # Combine states and actions
+            per_env_unique_indices = []
+            for env_idx in range(num_envs):
+                _, unique_indices = torch.unique(
+                    combined[env_idx], dim=0, return_inverse=True)
+                if unique_indices.shape[0] < horizon:
+                    num_repeats = (horizon + unique_indices.shape[0] - 1) // unique_indices.shape[0]  # Ceiling division
+                    unique_indices = unique_indices.repeat(num_repeats)
+                per_env_unique_indices.append(unique_indices.long())
+            indices = torch.stack(
+                [ind[:horizon] for ind in per_env_unique_indices], dim=0)
+        else:
+            indices = torch.arange(horizon).long()
+        batch_indices = torch.arange(num_envs).unsqueeze(1).expand(-1, indices.shape[1])  # Shape: (n_envs, steps)
+        _context_states = _context_states[batch_indices, indices, :]
+        _context_actions = _context_actions[batch_indices, indices, :]
+        _context_next_states = _context_next_states[batch_indices, indices, :]
+        _context_rewards = _context_rewards[batch_indices, indices, :]
+        batch = { 
+            'context_states': _context_states,
+            'context_actions': _context_actions,
+            'context_next_states': _context_next_states,
+            'context_rewards': _context_rewards,
+        }
+        controller.set_batch(batch)
+        states_lnr, actions_lnr, next_states_lnr, rewards_lnr = vec_env.deploy_eval(
+            controller)  # Deploy controller in environment for HORIZON steps
+        mean = np.sum(rewards_lnr, axis=-1)
+        cum_means.append(mean)
+
+        # Convert to torch
+        states_lnr = convert_to_tensor(states_lnr)  # (n_envs, horizon, state_dim)
+        actions_lnr = convert_to_tensor(actions_lnr)
+        next_states_lnr = convert_to_tensor(next_states_lnr)
+        rewards_lnr = convert_to_tensor(rewards_lnr[:, :, None])
+
+        # Roll in new data by shifting the batch and appending the new data.
+        if ep_ctxt == 0:
+            context_states = states_lnr[:, None, :, :]
+            context_actions = actions_lnr[:, None, :, :]
+            context_next_states = next_states_lnr[:, None, :, :]
+            context_rewards = rewards_lnr[:, None, :, :]
+        else:
+            context_states = torch.cat(
+                (context_states, states_lnr[:, None, :, :]), dim=1)
+            context_actions = torch.cat(
+                (context_actions, actions_lnr[:, None, :, :]), dim=1)
+            context_next_states = torch.cat(
+                (context_next_states, next_states_lnr[:, None, :, :]), dim=1)
+            context_rewards = torch.cat(
+                (context_rewards, rewards_lnr[:, None, :, :]), dim=1)
+
+    return np.stack(cum_means, axis=1)
+
 
 def deploy_online_vec(vec_env, controller, Heps, H, horizon):
     assert H % horizon == 0
 
-    ctx_rollouts = H // horizon
+    ctx_rollouts = H // horizon # Basically 1
 
     num_envs = vec_env.num_envs
     context_states = torch.zeros(
@@ -32,6 +178,7 @@ def deploy_online_vec(vec_env, controller, Heps, H, horizon):
         (num_envs, ctx_rollouts, horizon, 1)).float().to(device)
 
     cum_means = []
+
     for i in range(ctx_rollouts):
         batch = {
             'context_states': context_states[:, :i, :, :].reshape(num_envs, -1, vec_env.state_dim),
@@ -49,9 +196,9 @@ def deploy_online_vec(vec_env, controller, Heps, H, horizon):
 
         cum_means.append(np.sum(rewards_lnr, axis=-1))
 
+
     for _ in range(ctx_rollouts, Heps):
-        # Reshape the batch as a singular length H = ctx_rollouts * horizon sequence.
-        batch = {
+        batch = { 
             'context_states': context_states.reshape(num_envs, -1, vec_env.state_dim),
             'context_actions': context_actions.reshape(num_envs, -1, vec_env.action_dim),
             'context_next_states': context_next_states.reshape(num_envs, -1, vec_env.state_dim),
@@ -59,13 +206,12 @@ def deploy_online_vec(vec_env, controller, Heps, H, horizon):
         }
         controller.set_batch(batch)
         states_lnr, actions_lnr, next_states_lnr, rewards_lnr = vec_env.deploy_eval(
-            controller)
-
+            controller)  # Deploy controller in environment for HORIZON steps
         mean = np.sum(rewards_lnr, axis=-1)
         cum_means.append(mean)
 
         # Convert to torch
-        states_lnr = convert_to_tensor(states_lnr)
+        states_lnr = convert_to_tensor(states_lnr)  # (n_envs, horizon, state_dim)
         actions_lnr = convert_to_tensor(actions_lnr)
         next_states_lnr = convert_to_tensor(next_states_lnr)
         rewards_lnr = convert_to_tensor(rewards_lnr[:, :, None])
@@ -83,7 +229,9 @@ def deploy_online_vec(vec_env, controller, Heps, H, horizon):
     return np.stack(cum_means, axis=1)
 
 
-def online(eval_trajs, model, Heps, H, n_eval, dim, horizon):
+def long_online(
+        eval_trajs, model, Heps, H, n_eval, dim, horizon,
+        random_buffer=False):
     assert H % horizon == 0
 
     all_means_lnr = []
@@ -98,7 +246,12 @@ def online(eval_trajs, model, Heps, H, n_eval, dim, horizon):
     lnr_controller = DarkroomTransformerAgent(
         model, batch_size=n_eval, sample=True)
     vec_env = DarkroomEnvVec(envs)
-    cum_means_lnr = deploy_online_vec(vec_env, lnr_controller, Heps, H, horizon)
+
+    cum_means_lnr = deploy_online_vec_random_buffer(
+        vec_env, lnr_controller, Heps, H, horizon)
+
+    #cum_means_lnr = deploy_online_vec_long_context(
+    #    vec_env, lnr_controller, Heps, H, horizon)
 
     all_means_lnr = np.array(cum_means_lnr)
     means_lnr = np.mean(all_means_lnr, axis=0)
@@ -117,7 +270,49 @@ def online(eval_trajs, model, Heps, H, n_eval, dim, horizon):
     plt.title(f'Online Evaluation on {n_eval} Envs')
 
 
-def offline(eval_trajs, model, n_eval, horizon, dim):
+def online(
+        eval_trajs, model, Heps, H, n_eval, dim, horizon,
+        random_buffer=False):
+    assert H % horizon == 0
+
+    all_means_lnr = []
+
+    envs = []
+    for i_eval in range(n_eval):
+        print(f"Eval traj: {i_eval}")
+        traj = eval_trajs[i_eval]
+        env = DarkroomEnv(dim, traj['goal'], horizon)
+        envs.append(env)
+
+    lnr_controller = DarkroomTransformerAgent(
+        model, batch_size=n_eval, sample=True)
+    vec_env = DarkroomEnvVec(envs)
+
+    if random_buffer:
+        cum_means_lnr = deploy_online_vec_random_buffer(
+            vec_env, lnr_controller, Heps, H, horizon)
+    else:
+        cum_means_lnr = deploy_online_vec(
+            vec_env, lnr_controller, Heps, H, horizon)
+
+    all_means_lnr = np.array(cum_means_lnr)
+    means_lnr = np.mean(all_means_lnr, axis=0)
+    sems_lnr = scipy.stats.sem(all_means_lnr, axis=0)
+
+    # Plotting
+    for i in range(n_eval):
+        plt.plot(all_means_lnr[i], color='blue', alpha=0.2)
+
+    plt.plot(means_lnr, label='Learner')
+    plt.fill_between(np.arange(Heps), means_lnr - sems_lnr,
+                     means_lnr + sems_lnr, alpha=0.2)
+    plt.legend()
+    plt.xlabel('Episodes')
+    plt.ylabel('Average Return')
+    plt.title(f'Online Evaluation on {n_eval} Envs')
+
+
+def offline(eval_trajs, model, n_eval, horizon, dim, plot=False):
     """ Runs each episode separately with offline context. """
     all_rs_opt = []
     all_rs_lnr = []
@@ -175,7 +370,9 @@ def offline(eval_trajs, model, n_eval, horizon, dim):
         'Learner (greedy)': np.array(all_rs_lnr_greedy)
     }
     baselines_means = {k: np.mean(v) for k, v in baselines.items()}
-    colors = plt.cm.viridis(np.linspace(0, 1, len(baselines_means)))
-    plt.bar(baselines_means.keys(), baselines_means.values(), color=colors)
-    plt.ylabel('Average Return')
-    plt.title(f'Average Return on {n_eval} Trajectories')
+
+    if plot:
+        colors = plt.cm.viridis(np.linspace(0, 1, len(baselines_means)))
+        plt.bar(baselines_means.keys(), baselines_means.values(), color=colors)
+        plt.ylabel('Average Return')
+        plt.title(f'Average Return on {n_eval} Trajectories')

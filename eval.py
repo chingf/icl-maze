@@ -9,13 +9,13 @@ from src.evals import eval_darkroom
 from src.utils import (
     build_data_filename,
     build_model_filename,
+    find_ckpt_file,
 )
 import numpy as np
 import scipy
 import time
 import hydra
 import json
-import glob
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 import wandb
@@ -55,16 +55,8 @@ def main(cfg: DictConfig):
     # Instantiate model and load checkpoint  # TODO: Seed?
     model = instantiate(model_config)
     model = model.to(device)
-    if cfg.epoch > 0:
-        ckpt_pattern = f'{cfg.storage_dir}/models/{model_dir_path}/'
-        ckpt_pattern += f'epoch={cfg.epoch}-val_loss=*.ckpt'
-        matching_files = glob.glob(ckpt_pattern)
-        if len(matching_files) > 0:
-            ckpt_name = os.path.basename(matching_files[0])
-        else:
-            raise ValueError(f"No checkpoint found for epoch {cfg.epoch}")
-    else:
-        ckpt_name = 'last.ckpt'  # Use last checkpoint if epoch not specified
+    ckpt_name = find_ckpt_file(cfg.storage_dir, model_dir_path, cfg.epoch)
+    print(f'Loading checkpoint {ckpt_name}')
     checkpoint = torch.load(
         f'{cfg.storage_dir}/models/{model_dir_path}/{ckpt_name}')
     model.load_state_dict(checkpoint['state_dict'])
@@ -84,21 +76,32 @@ def main(cfg: DictConfig):
             'Heps': 40,
             'horizon': env_config['horizon'],  # Horizon in an episode
             'H': H,  # Number of episodes to keep in context. TODO: not really used?
-            'n_eval': min(20, n_eval),
+            'n_eval': n_eval,
             'dim': env_config['dim'],
         }
-        eval_darkroom.online(eval_trajs, model, **config)
+        #eval_darkroom.online(eval_trajs, model, **config)
+        #fig = plt.gcf()
+        #wandb_logger.experiment.log({"online_performance": wandb.Image(fig)}) 
+        #plt.clf()
+
+        #eval_darkroom.online(eval_trajs, model, random_buffer=True, **config)
+        #fig = plt.gcf()
+        #wandb_logger.experiment.log({"online_performance_random_buffer": wandb.Image(fig)}) 
+        #plt.clf()
+
+        eval_darkroom.long_online(eval_trajs, model, **config)
         fig = plt.gcf()
-        wandb_logger.experiment.log({"online_performance": wandb.Image(fig)}) 
+        wandb_logger.experiment.log({"online_performance_long_context": wandb.Image(fig)}) 
         plt.clf()
 
-        del config['Heps']
-        del config['H']
-        config['n_eval'] = n_eval
-        eval_darkroom.offline(eval_trajs, model, **config)
-        fig = plt.gcf()
-        wandb_logger.experiment.log({"offline_performance": wandb.Image(fig)}) 
-        plt.clf()
+        #  TODO: Do this per context length, and show bar for the final context length
+        #del config['Heps']
+        #del config['H']
+        #config['n_eval'] = n_eval
+        #model_returns = eval_darkroom.offline(eval_trajs, model, plot=True, **config)
+        #fig = plt.gcf()
+        #wandb_logger.experiment.log({"offline_performance": wandb.Image(fig)}) 
+        #plt.clf()
 
 if __name__ == '__main__':
     main()
