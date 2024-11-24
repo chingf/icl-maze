@@ -1,4 +1,6 @@
-lr: 1e-4
-num_epochs: 2000
-batch_size: 2048
+lr: 1e-3
+num_epochs: 600
+batch_size: 8192
 weight_decay: 1e-4
+early_stopping_patience: 10
+early_stopping_min_delta: 1e-4

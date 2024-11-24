@@ -5,10 +5,10 @@ defaults:
   - _self_
 
 wandb:
-  project: "darkroom"
+  project: darkroom_NoPosEmbedding
 
 seed: 0
-epoch: -1
+epoch: best
 H: -1
-n_eval: 100
+n_eval: 20
 storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze

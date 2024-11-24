@@ -1,5 +1,5 @@
 env: darkroom
-n_envs: 10000
+n_envs: 100000
 horizon: 100
 dim: 10
 state_dim: 2
