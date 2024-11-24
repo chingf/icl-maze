@@ -15,14 +15,14 @@ which python
 python --version
 echo $CONDA_DEFAULT_ENV
 
-python train.py -m
-python eval.py -m
+python train.py -m model.dropout=0.2
+python eval.py -m model.dropout=0.2
 
-python train.py -m model.n_head=1
-python eval.py -m model.n_head=1
+python train.py -m model.n_head=1 model.dropout=0.2
+python eval.py -m model.n_head=1 model.dropout=0.2
 
-python train.py -m env.rollin_type=expert
-python eval.py -m env.rollin_type=expert
+python train.py -m env.rollin_type=expert model.dropout=0.2
+python eval.py -m env.rollin_type=expert model.dropout=0.2
 
-python train.py -m env.rollin_type=expert model.n_head=1
-python eval.py -m env.rollin_type=expert model.n_head=1
+python train.py -m env.rollin_type=expert model.n_head=1 model.dropout=0.2
+python eval.py -m env.rollin_type=expert model.n_head=1 model.dropout=0.2
