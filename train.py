@@ -16,7 +16,7 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 import wandb
 wandb.login()
 
@@ -74,7 +74,7 @@ def main(cfg: DictConfig):
         train_dataset, optimizer_config['batch_size'], shuffle=True)
     test_loader = torch.utils.data.DataLoader(
         test_dataset, optimizer_config['batch_size'])
-    
+
     # Set up logging and checkpointing
     wandb_config = {
         'env': env_config,
@@ -98,23 +98,35 @@ def main(cfg: DictConfig):
     with open(f'{cfg.storage_dir}/models/{model_chkpt_path}/run_info.json', 'w') as f:
         json.dump(run_info, f)
 
+    # Checkpoint top K models and last model
     checkpoint_callback = ModelCheckpoint(
         dirpath=f'{cfg.storage_dir}/models/{model_chkpt_path}',
-        filename='{epoch}-{val_loss:.2f}',
+        filename="{epoch}-{val_loss:.2f}",
         save_top_k=3,
         monitor='val_loss',
         mode='min',
         save_last=True
     )
 
+    # Early stopping
+    early_stopping = EarlyStopping(
+        monitor='val_loss',
+        patience=optimizer_config['early_stopping_patience'],
+        min_delta=optimizer_config['early_stopping_min_delta'],
+        mode='min',
+        verbose=True,
+    )
+
     trainer = pl.Trainer(
         max_epochs=optimizer_config['num_epochs'],
         logger=wandb_logger,
-        callbacks=[checkpoint_callback],
-        accelerator='auto',  # TODO: maybe need to specify devices manually
+        callbacks=[checkpoint_callback], #, early_stopping],
+        accelerator='auto',
+        log_every_n_steps=None,
     )
 
     # Train model
+
     trainer.fit(
         model,
         train_dataloaders=train_loader,
