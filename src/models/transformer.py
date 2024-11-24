@@ -11,6 +11,10 @@ from transformers import GPT2Config, GPT2Model
 from IPython import embed
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+class ZeroEmbedding(nn.Embedding):
+    def forward(self, position_ids):
+        return 0
+
 class Transformer(pl.LightningModule):
     """Transformer class."""
 
@@ -51,6 +55,7 @@ class Transformer(pl.LightningModule):
             use_cache=False,
         )
         self.transformer = GPT2Model(config)
+        self.transformer.wpe = ZeroEmbedding(config.n_positions, config.n_embd)
         self.embed_transition = nn.Linear(
             2 * self.state_dim + self.action_dim + 1, self.n_embd)
         self.pred_actions = nn.Linear(self.n_embd, self.action_dim)
@@ -109,7 +114,24 @@ class Transformer(pl.LightningModule):
             lr=self.optimizer_config['lr'],
             weight_decay=self.optimizer_config['weight_decay']
         )
-        return optimizer
+        lr_scheduler = {  # linearly decrease LR from 1e-3 to 1e-4 over 75 epochs
+            'scheduler': torch.optim.lr_scheduler.LinearLR(
+                optimizer,
+                start_factor=1.0,  # Start at 1e-3 (10x higher than final 1e-4) 
+                end_factor=0.1,     # End at 1e-4
+                total_iters=100,      # Linear decrease over 75 epochs
+            ),
+            'monitor': 'val_loss',
+        }
+        return {'optimizer': optimizer, 'lr_scheduler': lr_scheduler}
+
+    #def configure_optimizers(self):
+    #    optimizer = torch.optim.AdamW(
+    #        self.parameters(),
+    #        lr=self.optimizer_config['lr'],
+    #        weight_decay=self.optimizer_config['weight_decay']
+    #    )
+    #    return optimizer
 
 
 class ImageTransformer(Transformer):
