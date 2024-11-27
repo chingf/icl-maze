@@ -376,3 +376,4 @@ def offline(eval_trajs, model, n_eval, horizon, dim, plot=False):
         plt.bar(baselines_means.keys(), baselines_means.values(), color=colors)
         plt.ylabel('Average Return')
         plt.title(f'Average Return on {n_eval} Trajectories')
+    return baselines
