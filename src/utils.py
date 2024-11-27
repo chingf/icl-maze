@@ -18,8 +18,7 @@ def convert_to_tensor(x, store_gpu=True):
     else:
         return torch.tensor(np.asarray(x)).float()
     
-def find_ckpt_file(storage_dir, model_dir_path, epoch):
-    ckpt_dir = f'{storage_dir}/models/{model_dir_path}'
+def find_ckpt_file(ckpt_dir, epoch):
     if isinstance(epoch, str):
         if epoch != "best":
             raise ValueError("Unrecognized epoch string name")
@@ -44,53 +43,16 @@ def find_ckpt_file(storage_dir, model_dir_path, epoch):
     return ckpt_name
     
 ## Filename generation
-    
-def build_data_filename(env_config, mode, storage_dir=None):
-    if env_config['env'] == 'darkroom':
-        filename = build_darkroom_data_filename(env_config, mode)
-        if storage_dir is not None:
-            filename = os.path.join(storage_dir, filename)
-        return filename
-    else:
-        raise NotImplementedError
-    
-def build_model_filename(env_config, model_config, optimizer_config):
-    if env_config['env'] == 'darkroom':
-        return build_darkroom_model_filename(env_config, model_config, optimizer_config)
-    else:
-        raise NotImplementedError
 
-def build_darkroom_data_filename(env_config, mode):
-    """
-    Builds the filename for the darkroom data.
-    Mode is either 0: train, 1: test, 2: eval.
-    """
-    filename = env_config['env']
-    filename += '_envs' + str(env_config['n_envs'])
-    filename += '_H' + str(env_config['horizon'])
-    filename += '_d' + str(env_config['dim'])
-    filename += '_' + env_config['rollin_type']
-    if mode == 0:
-        filename += '_train'
-    elif mode == 1:
-        filename += '_test'
-    elif mode == 2:
-        filename += '_eval'
-        
-    return filename + '.pkl'
-
-
-def build_darkroom_model_filename(env_config, model_config, optimizer_config):
-    """
-    Builds the filename for the darkroom model.
-    """
-
+def build_env_name(env_config):
     env_filename = env_config['env']
     env_filename += '_envs' + str(env_config['n_envs'])
     env_filename += '_H' + str(env_config['horizon'])
     env_filename += '_d' + str(env_config['dim'])
     env_filename += '_' + env_config['rollin_type']
+    return env_filename
 
+def build_model_name(model_config, optimizer_config):
     model_filename = model_config['name']
     model_filename += '_embd' + str(model_config['n_embd'])
     model_filename += '_layer' + str(model_config['n_layer'])
@@ -99,4 +61,69 @@ def build_darkroom_model_filename(env_config, model_config, optimizer_config):
     model_filename += '_lr' + str(optimizer_config['lr'])
     model_filename += '_batch' + str(optimizer_config['batch_size'])
 
-    return env_filename + '/' + model_filename
+def build_dataset_name(mode):
+    if mode == 0:
+        filename = 'train'
+    elif mode == 1:
+        filename = 'test'
+    elif mode == 2:
+        filename = 'eval'
+    return filename + '.pkl'
+
+## Old
+
+#def build_data_filename(env_config, mode, storage_dir=None):
+#    if env_config['env'] == 'darkroom':
+#        filename = build_darkroom_data_filename(env_config, mode)
+#        if storage_dir is not None:
+#            filename = os.path.join(storage_dir, filename)
+#        return filename
+#    else:
+#        raise NotImplementedError
+#    
+#def build_model_filename(env_config, model_config, optimizer_config):
+#    if env_config['env'] == 'darkroom':
+#        return build_darkroom_model_filename(env_config, model_config, optimizer_config)
+#    else:
+#        raise NotImplementedError
+#
+#def build_darkroom_data_filename(env_config, mode):
+#    """
+#    Builds the filename for the darkroom data.
+#    Mode is either 0: train, 1: test, 2: eval.
+#    """
+#    filename = env_config['env']
+#    filename += '_envs' + str(env_config['n_envs'])
+#    filename += '_H' + str(env_config['horizon'])
+#    filename += '_d' + str(env_config['dim'])
+#    filename += '_' + env_config['rollin_type']
+#    if mode == 0:
+#        filename += '_train'
+#    elif mode == 1:
+#        filename += '_test'
+#    elif mode == 2:
+#        filename += '_eval'
+#        
+#    return filename + '.pkl'
+#
+#
+#def build_darkroom_model_filename(env_config, model_config, optimizer_config):
+#    """
+#    Builds the filename for the darkroom model.
+#    """
+#
+#    env_filename = env_config['env']
+#    env_filename += '_envs' + str(env_config['n_envs'])
+#    env_filename += '_H' + str(env_config['horizon'])
+#    env_filename += '_d' + str(env_config['dim'])
+#    env_filename += '_' + env_config['rollin_type']
+#
+#    model_filename = model_config['name']
+#    model_filename += '_embd' + str(model_config['n_embd'])
+#    model_filename += '_layer' + str(model_config['n_layer'])
+#    model_filename += '_head' + str(model_config['n_head'])
+#    model_filename += '_do' + str(model_config['dropout'])
+#    model_filename += '_lr' + str(optimizer_config['lr'])
+#    model_filename += '_batch' + str(optimizer_config['batch_size'])
+#
+#    return env_filename + '/' + model_filename

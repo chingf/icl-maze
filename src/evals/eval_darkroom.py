@@ -377,3 +377,70 @@ def offline(eval_trajs, model, n_eval, horizon, dim, plot=False):
         plt.ylabel('Average Return')
         plt.title(f'Average Return on {n_eval} Trajectories')
     return baselines
+
+
+def offline_repr(eval_trajs, model, n_eval, horizon, dim, plot=False):
+    """ Runs each episode separately with offline context. """
+    all_rs_opt = []
+    all_rs_lnr = []
+    all_rs_lnr_greedy = []
+
+    envs = []
+    trajs = []
+
+    for i_eval in range(n_eval):  # Collect eval environment and trajectories
+        print(f"Eval traj: {i_eval}")
+
+        traj = eval_trajs[i_eval]
+        batch = {
+            'context_states': convert_to_tensor(traj['context_states'][None, :, :]),
+            'context_actions': convert_to_tensor(traj['context_actions'][None, :, :]),
+            'context_next_states': convert_to_tensor(traj['context_next_states'][None, :, :]),
+            'context_rewards': convert_to_tensor(traj['context_rewards'][None, :, None]),
+        }
+
+        env = DarkroomEnv(dim, traj['goal'], horizon)
+
+        true_opt = DarkroomOptPolicy(env)
+        true_opt.set_batch(batch)
+
+        _, _, _, rs_opt = env.deploy_eval(true_opt)
+        all_rs_opt.append(np.sum(rs_opt))
+
+        envs.append(env)
+        trajs.append(traj)
+
+    print("Running darkroom offline evaluations in parallel")
+    vec_env = DarkroomEnvVec(envs)
+    lnr = DarkroomTransformerAgent(
+        model, batch_size=n_eval, sample=True)
+    lnr_greedy = DarkroomTransformerAgent(
+        model, batch_size=n_eval, sample=False)
+
+    batch = {
+        'context_states': convert_to_tensor([traj['context_states'] for traj in trajs]),
+        'context_actions': convert_to_tensor([traj['context_actions'] for traj in trajs]),
+        'context_next_states': convert_to_tensor([traj['context_next_states'] for traj in trajs]),
+        'context_rewards': convert_to_tensor([traj['context_rewards'][:, None] for traj in trajs]),
+    }
+    lnr.set_batch(batch)
+    lnr_greedy.set_batch(batch)
+
+    _, _, _, rs_lnr = vec_env.deploy_eval(lnr)
+    _, _, _, rs_lnr_greedy = vec_env.deploy_eval(lnr_greedy)
+    all_rs_lnr = np.sum(rs_lnr, axis=-1)
+    all_rs_lnr_greedy = np.sum(rs_lnr_greedy, axis=-1)
+
+    baselines = {
+        'Opt': np.array(all_rs_opt),
+        'Learner': np.array(all_rs_lnr),
+        'Learner (greedy)': np.array(all_rs_lnr_greedy)
+    }
+    baselines_means = {k: np.mean(v) for k, v in baselines.items()}
+
+    if plot:
+        colors = plt.cm.viridis(np.linspace(0, 1, len(baselines_means)))
+        plt.bar(baselines_means.keys(), baselines_means.values(), color=colors)
+        plt.ylabel('Average Return')
+        plt.title(f'Average Return on {n_eval} Trajectories')
+    return baselines

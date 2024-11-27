@@ -11,7 +11,10 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 
 from src.envs.darkroom_env import DarkroomEnv
-from src.utils import build_data_filename
+from src.utils import (
+    build_env_name,
+    build_dataset_name,
+)
 
 
 def generate_history(env, rollin_type):
@@ -82,31 +85,34 @@ def main(cfg: DictConfig):
     np.random.seed(0)
     random.seed(0)
     env_config = OmegaConf.to_container(cfg.env, resolve=True)
+    env_name = build_env_name(env_config)
+    dataset_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/datasets'
+    os.makedirs(dataset_storage_dir, exist_ok=True)
 
     if env_config['env'] == 'darkroom':
         goals = np.array([[(j, i) for i in range(env_config['dim'])]
                          for j in range(env_config['dim'])]).reshape(-1, 2)
         n_envs = env_config['n_envs']
         dim = env_config['dim']
+        n_repeats = n_envs // (dim * dim)
 
         np.random.RandomState(seed=0).shuffle(goals)
-        train_test_split = int(.8 * len(goals))
-        train_goals = goals[:train_test_split]
-        test_goals = goals[train_test_split:]
-        eval_goals = np.array(test_goals.tolist() * int(100 // len(test_goals)))
-        train_goals = np.repeat(train_goals, n_envs // (dim * dim), axis=0)
-        test_goals = np.repeat(test_goals, n_envs // (dim * dim), axis=0)
+        split_idx_1 = int(.8 * len(goals))
+        split_idx_2 = int(.9 * len(goals))
+        train_goals = goals[:split_idx_1]
+        test_goals = goals[split_idx_1:split_idx_2]
+        eval_goals = goals[split_idx_2:]
+        eval_goals = np.repeat(eval_goals, n_repeats, axis=0)
+        train_goals = np.repeat(train_goals, n_repeats, axis=0)
+        test_goals = np.repeat(test_goals, n_repeats, axis=0)
 
         train_trajs = generate_darkroom_histories(train_goals, env_config)
         test_trajs = generate_darkroom_histories(test_goals, env_config)
         eval_trajs = generate_darkroom_histories(eval_goals, env_config)
 
-        train_filepath = build_data_filename(
-            env_config, mode=0, storage_dir=cfg.storage_dir + '/datasets')
-        test_filepath = build_data_filename(
-            env_config, mode=1, storage_dir=cfg.storage_dir + '/datasets')
-        eval_filepath = build_data_filename(
-            env_config, mode=2, storage_dir=cfg.storage_dir + '/datasets')
+        train_filepath = os.path.join(dataset_storage_dir, build_dataset_name(0))
+        test_filepath = os.path.join(dataset_storage_dir, build_dataset_name(1))
+        eval_filepath = os.path.join(dataset_storage_dir, build_dataset_name(2))
     else:
         raise NotImplementedError
 

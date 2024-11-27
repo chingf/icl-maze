@@ -24,8 +24,9 @@ import numpy as np
 import random
 from src.dataset import Dataset, ImageDataset
 from src.utils import (
-    build_data_filename,
-    build_model_filename,
+    build_env_name,
+    build_model_name,
+    build_dataset_name,
 )
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -45,6 +46,15 @@ def main(cfg: DictConfig):
     model = instantiate(model_config)
     model = model.to(device)
 
+    # Directory path handling
+    env_name = build_env_name(env_config)
+    model_name = build_model_name(model_config, optimizer_config)
+    dataset_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/datasets'
+    model_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/models/{model_name}'
+    train_dset_path = os.path.join(dataset_storage_dir, build_dataset_name(0))
+    test_dset_path = os.path.join(dataset_storage_dir, build_dataset_name(1))
+    os.makedirs(model_storage_dir, exist_ok=True)
+
     # Random seed handling 
     tmp_seed = seed = cfg.seed  # TODO: figure out what's happening with seeds
     if seed == -1:
@@ -58,22 +68,17 @@ def main(cfg: DictConfig):
     np.random.seed(tmp_seed)
     random.seed(tmp_seed)
 
-    # Set up directories
-    path_train = build_data_filename(
-        env_config, mode=0, storage_dir=cfg.storage_dir + '/datasets')
-    path_test = build_data_filename(
-        env_config, mode=1, storage_dir=cfg.storage_dir + '/datasets')
-    model_chkpt_path = build_model_filename(
-        env_config, model_config, optimizer_config)
-    os.makedirs(f'{cfg.storage_dir}/models/{model_chkpt_path}', exist_ok=True)
-
     # Set up datasets and dataloaders
-    train_dataset = Dataset(path_train, env_config)
-    test_dataset = Dataset(path_test, env_config)
+    train_dataset = Dataset(train_dset_path, env_config)
+    test_dataset = Dataset(test_dset_path, env_config)
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, optimizer_config['batch_size'], shuffle=True)
+        train_dataset, optimizer_config['batch_size'], shuffle=True,
+        num_workers=optimizer_config['num_workers'],
+    )
     test_loader = torch.utils.data.DataLoader(
-        test_dataset, optimizer_config['batch_size'])
+        test_dataset, optimizer_config['batch_size'],
+        num_workers=optimizer_config['num_workers'],
+    )
 
     # Set up logging and checkpointing
     wandb_config = {
@@ -84,9 +89,9 @@ def main(cfg: DictConfig):
     }
     wandb_logger = WandbLogger(
         project=cfg.wandb.project,
-        name=model_chkpt_path,
+        name=model_storage_dir,
         config=wandb_config,
-        save_dir='logs'
+        save_dir=cfg.storage_dir
     )
 
     # Save run ID for later evaluation
@@ -95,12 +100,12 @@ def main(cfg: DictConfig):
         "run_name": wandb_logger.experiment.name,
         "version": wandb_logger.version  # This is the same as run_id
     }
-    with open(f'{cfg.storage_dir}/models/{model_chkpt_path}/run_info.json', 'w') as f:
+    with open(f'{model_storage_dir}/run_info.json', 'w') as f:
         json.dump(run_info, f)
 
     # Checkpoint top K models and last model
     checkpoint_callback = ModelCheckpoint(
-        dirpath=f'{cfg.storage_dir}/models/{model_chkpt_path}',
+        dirpath=model_storage_dir,
         filename="{epoch}-{val_loss:.2f}",
         save_top_k=3,
         monitor='val_loss',

@@ -7,8 +7,9 @@ from IPython import embed
 
 from src.evals import eval_darkroom
 from src.utils import (
-    build_data_filename,
-    build_model_filename,
+    build_env_name,
+    build_model_name,
+    build_dataset_name,
     find_ckpt_file,
 )
 import numpy as np
@@ -36,38 +37,40 @@ def main(cfg: DictConfig):
     model_config['state_dim'] = env_config['state_dim']
     model_config['action_dim'] = env_config['action_dim']
     model_config['optimizer_config'] = optimizer_config
+    wandb_project = cfg.wandb.project
+
+    # Directory path handling
+    env_name = build_env_name(env_config)
+    model_name = build_model_name(model_config, optimizer_config)
+    dataset_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/datasets'
+    model_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/models/{model_name}'
+    eval_dset_path = os.path.join(dataset_storage_dir, build_dataset_name(2))
 
     # Resume wandb run from training
-    model_dir_path = build_model_filename(
-        env_config, model_config, optimizer_config)
     try:
-        run_info_path = os.path.join(
-            cfg.storage_dir, 'models', model_dir_path, 'run_info.json')
+        run_info_path = os.path.join(model_storage_dir, 'run_info.json')
         with open(run_info_path, "r") as f:
             run_id = json.load(f)['run_id']
     except FileNotFoundError:
         raise ValueError("Could not locate wandb ID for trained model.")
-    wandb_project = cfg.wandb.project
     wandb_logger = WandbLogger(
         project=wandb_project,
         id=run_id,  # Specify the run to resume
-        resume="must"  # Must resume the exact run
+        resume="must",  # Must resume the exact run
+        save_dir=cfg.storage_dir
     )
 
     # Instantiate model and load checkpoint  # TODO: Seed?
     model = instantiate(model_config)
     model = model.to(device)
-    ckpt_name = find_ckpt_file(cfg.storage_dir, model_dir_path, cfg.epoch)
+    ckpt_name = find_ckpt_file(model_storage_dir, cfg.epoch)
     print(f'Loading checkpoint {ckpt_name}')
-    checkpoint = torch.load(
-        f'{cfg.storage_dir}/models/{model_dir_path}/{ckpt_name}')
+    checkpoint = torch.load(os.path.join(model_storage_dir, ckpt_name))
     model.load_state_dict(checkpoint['state_dict'])
     model.eval()
 
     # Load trajectories
-    eval_traj_filepath = build_data_filename(
-        env_config, mode=2, storage_dir=cfg.storage_dir + '/datasets')
-    with open(eval_traj_filepath, 'rb') as f:
+    with open(eval_dset_path, 'rb') as f:
         eval_trajs = pickle.load(f)
     n_eval = min(cfg.n_eval, len(eval_trajs))
 
