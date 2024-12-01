@@ -6,7 +6,7 @@ from src.agents.base_agent import Agent
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-class DarkroomOptPolicy(Agent):
+class OptPolicy(Agent):
     def __init__(self, env):
         super().__init__()
         self.env = env
@@ -19,7 +19,7 @@ class DarkroomOptPolicy(Agent):
         return self.env.opt_action(state)        
 
 
-class DarkroomTransformerAgent(Agent):
+class TransformerAgent(Agent):
     def __init__(self, model, batch_size=1, sample=False):
         self.model = model
         self.state_dim = model.state_dim
