@@ -1,8 +1,4 @@
 import json
-import torch.multiprocessing as mp
-if mp.get_start_method(allow_none=True) is None:
-    mp.set_start_method('spawn', force=True)  # or 'forkserver'
-
 import argparse
 import os
 import time
@@ -29,7 +25,9 @@ from src.utils import (
     build_dataset_name,
 )
 
+torch.set_float32_matmul_precision('medium')
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+n_gpus = torch.cuda.device_count()
 
 @hydra.main(version_base=None, config_path="configs", config_name="training")
 def main(cfg: DictConfig):
@@ -45,6 +43,7 @@ def main(cfg: DictConfig):
     model_config['optimizer_config'] = optimizer_config
     model = instantiate(model_config)
     model = model.to(device)
+
 
     # Directory path handling
     env_name = build_env_name(env_config)
@@ -73,11 +72,11 @@ def main(cfg: DictConfig):
     test_dataset = Dataset(test_dset_path, env_config)
     train_loader = torch.utils.data.DataLoader(
         train_dataset, optimizer_config['batch_size'], shuffle=True,
-        num_workers=optimizer_config['num_workers'],
+        #num_workers=optimizer_config['num_workers'],
     )
     test_loader = torch.utils.data.DataLoader(
         test_dataset, optimizer_config['batch_size'],
-        num_workers=optimizer_config['num_workers'],
+        #num_workers=optimizer_config['num_workers'],
     )
 
     # Set up logging and checkpointing
@@ -89,31 +88,32 @@ def main(cfg: DictConfig):
     }
     wandb_logger = WandbLogger(
         project=cfg.wandb.project,
-        name=model_storage_dir,
+        name=env_name + '/' + model_name,
         config=wandb_config,
         save_dir=cfg.storage_dir
     )
 
     # Save run ID for later evaluation
-    run_info = {
-        "run_id": wandb_logger.experiment.id,
-        "run_name": wandb_logger.experiment.name,
-        "version": wandb_logger.version  # This is the same as run_id
-    }
-    with open(f'{model_storage_dir}/run_info.json', 'w') as f:
-        json.dump(run_info, f)
+    run_id = wandb_logger.experiment.id
+    if isinstance(run_id, str):
+        run_info = {
+            "run_id": str(wandb_logger.experiment.id),
+            "run_name": str(wandb_logger.experiment.name),
+        }
+        with open(f'{model_storage_dir}/run_info.json', 'w') as f:
+            json.dump(run_info, f)
 
     # Checkpoint top K models and last model
     checkpoint_callback = ModelCheckpoint(
         dirpath=model_storage_dir,
-        filename="{epoch}-{val_loss:.2f}",
+        filename="{epoch}-{val_loss:.6f}",
         save_top_k=3,
         monitor='val_loss',
         mode='min',
         save_last=True
     )
 
-    # Early stopping
+    # Early stopping callback
     early_stopping = EarlyStopping(
         monitor='val_loss',
         patience=optimizer_config['early_stopping_patience'],
@@ -122,21 +122,44 @@ def main(cfg: DictConfig):
         verbose=True,
     )
 
+    # Debugging callback
+    class GradientDebugCallback(pl.Callback):
+        def __init__(self):
+            self.gradients_seen = set()
+            
+        def on_before_optimizer_step(self, trainer, pl_module, optimizer):
+            for name, param in pl_module.named_parameters():
+                if param.grad is not None:
+                    self.gradients_seen.add(name)
+                
+        def on_train_epoch_end(self, trainer, pl_module):
+            print("\nParameters that received gradients this epoch:")
+            all_params = set(name for name, _ in pl_module.named_parameters())
+            for name in all_params:
+                if name in self.gradients_seen:
+                    print(f"✓ {name}")
+                else:
+                    print(f"✗ {name}")
+
+    # Set up trainer
     trainer = pl.Trainer(
         max_epochs=optimizer_config['num_epochs'],
         logger=wandb_logger,
-        callbacks=[checkpoint_callback], #, early_stopping],
+        callbacks=[checkpoint_callback],
         accelerator='auto',
+        devices='auto',
+        strategy='auto',
         log_every_n_steps=None,
+        precision="16-mixed",
     )
 
     # Train model
-
     trainer.fit(
         model,
         train_dataloaders=train_loader,
         val_dataloaders=test_loader
     )
+
 
 if __name__ == "__main__":
     main()
