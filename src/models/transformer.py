@@ -11,7 +11,7 @@ from transformers import GPT2Config, GPT2Model
 from IPython import embed
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-class ZeroEmbedding(nn.Embedding):
+class ZeroEmbedding(nn.Module):
     def forward(self, position_ids):
         return 0
 
@@ -27,6 +27,7 @@ class Transformer(pl.LightningModule):
         action_dim: int,
         dropout: float,
         horizon: int,
+        train_on_last_pred_only: bool,
         test: bool,
         name: str,
         optimizer_config: dict,
@@ -41,6 +42,7 @@ class Transformer(pl.LightningModule):
         self.action_dim = action_dim
         self.dropout = dropout
         self.horizon = horizon
+        self.train_on_last_pred_only = train_on_last_pred_only
         self.test = test
         self.optimizer_config = optimizer_config = optimizer_config
 
@@ -55,7 +57,8 @@ class Transformer(pl.LightningModule):
             use_cache=False,
         )
         self.transformer = GPT2Model(config)
-        self.transformer.wpe = ZeroEmbedding(config.n_positions, config.n_embd)
+        self.remove_unused_params(self.transformer)
+        self.transformer.wpe = ZeroEmbedding()
         self.embed_transition = nn.Linear(
             2 * self.state_dim + self.action_dim + 1, self.n_embd)
         self.pred_actions = nn.Linear(self.n_embd, self.action_dim)
@@ -81,7 +84,14 @@ class Transformer(pl.LightningModule):
 
         if self.test:
             return preds[:, -1, :]
-        return preds[:, 1:, :]
+        if self.train_on_last_pred_only:
+            indices = torch.tensor([preds.shape[1] - 1]).to(preds.device)
+        else:
+            indices = torch.cat([
+                torch.tensor([0]), torch.arange(5, preds.shape[1], 5)]
+            ).to(preds.device)
+        preds_subset = torch.index_select(preds, 1, indices)
+        return preds_subset
 
     def batch_forward(self, batch, batch_idx):
         pred_actions = self(batch)
@@ -91,21 +101,26 @@ class Transformer(pl.LightningModule):
         true_actions = true_actions.unsqueeze(1).repeat(1, pred_actions.shape[1], 1)
         true_actions = true_actions.reshape(-1, self.action_dim)
         pred_actions = pred_actions.reshape(-1, self.action_dim)
-        
+        # Calculate accuracy by comparing predicted and true actions
+        pred_actions_idx = torch.argmax(pred_actions, dim=1) 
+        true_actions_idx = torch.argmax(true_actions, dim=1)
+        accuracy = (pred_actions_idx == true_actions_idx).float().mean()
         loss = self.loss_fn(pred_actions, true_actions) / self.horizon
-        return loss
+        return loss, accuracy
 
   
     def training_step(self, batch, batch_idx):
         batch_size = batch['query_states'].shape[0]
-        loss = self.batch_forward(batch, batch_idx)
+        loss, accuracy = self.batch_forward(batch, batch_idx)
         self.log('train_loss', loss/batch_size, on_epoch=True, prog_bar=True)
+        self.log('train_accuracy', accuracy, on_epoch=True, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         batch_size = batch['query_states'].shape[0]
-        loss = self.batch_forward(batch, batch_idx)
+        loss, accuracy = self.batch_forward(batch, batch_idx)
         self.log('val_loss', loss/batch_size, on_epoch=True, prog_bar=True)
+        self.log('val_accuracy', accuracy, on_epoch=True, prog_bar=True)
         return loss
 
     def configure_optimizers(self):
@@ -124,14 +139,16 @@ class Transformer(pl.LightningModule):
             'monitor': 'val_loss',
         }
         return {'optimizer': optimizer, 'lr_scheduler': lr_scheduler}
-
-    #def configure_optimizers(self):
-    #    optimizer = torch.optim.AdamW(
-    #        self.parameters(),
-    #        lr=self.optimizer_config['lr'],
-    #        weight_decay=self.optimizer_config['weight_decay']
-    #    )
-    #    return optimizer
+    
+    def remove_unused_params(self, model):
+        try:
+            delattr(model, 'wpe')
+        except:
+            print('Attempted to delete WPE in transformer, but could not find.')
+        try:
+            delattr(model, 'wte')
+        except:
+            print('Attempted to delete WTE in transformer, but could not find.')
 
 
 class ImageTransformer(Transformer):
