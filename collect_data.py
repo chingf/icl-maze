@@ -11,6 +11,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 
 from src.envs.darkroom_env import DarkroomEnv
+from src.envs.maze_env import MazeEnv
 from src.utils import (
     build_env_name,
     build_dataset_name,
@@ -24,7 +25,7 @@ def generate_history(env, rollin_type):
     next_states = []
     rewards = []
 
-    state = env.reset()
+    state = env.sample_state()
     for _ in range(env.horizon):
         if rollin_type == 'uniform':
             state = env.sample_state()
@@ -79,6 +80,13 @@ def generate_darkroom_histories(goals, env_config):
     trajs = generate_histories_from_envs(envs, env_config)
     return trajs
 
+def generate_maze_histories(goals, env_config):
+    """ Creates darkroom environments and then makes trajectories. """
+    envs = [MazeEnv(
+        env_config['layers'], goal, env_config['horizon']) for goal in goals]
+    trajs = generate_histories_from_envs(envs, env_config)
+    return trajs
+
 
 @hydra.main(version_base=None, config_path="configs", config_name="data_collection")
 def main(cfg: DictConfig):
@@ -109,6 +117,29 @@ def main(cfg: DictConfig):
         train_trajs = generate_darkroom_histories(train_goals, env_config)
         test_trajs = generate_darkroom_histories(test_goals, env_config)
         eval_trajs = generate_darkroom_histories(eval_goals, env_config)
+
+        train_filepath = os.path.join(dataset_storage_dir, build_dataset_name(0))
+        test_filepath = os.path.join(dataset_storage_dir, build_dataset_name(1))
+        eval_filepath = os.path.join(dataset_storage_dir, build_dataset_name(2))
+    elif env_config['env'] == 'maze':
+        layers = env_config['layers']
+        goals = [(layers-1, p) for p in range(2**(layers-1))]
+        n_envs = env_config['n_envs']
+        n_repeats = n_envs // (len(goals))
+
+        np.random.RandomState(seed=0).shuffle(goals)
+        split_idx_1 = int(.8 * len(goals))
+        split_idx_2 = int(.9 * len(goals))
+        train_goals = goals[:split_idx_1]
+        test_goals = goals[split_idx_1:split_idx_2]
+        eval_goals = goals[split_idx_2:]
+        train_goals = np.tile(train_goals, (n_repeats, 1))
+        test_goals = np.tile(test_goals, (n_repeats, 1))
+        eval_goals = np.tile(eval_goals, (n_repeats, 1))
+
+        train_trajs = generate_maze_histories(train_goals, env_config)
+        test_trajs = generate_maze_histories(test_goals, env_config)
+        eval_trajs = generate_maze_histories(eval_goals, env_config)
 
         train_filepath = os.path.join(dataset_storage_dir, build_dataset_name(0))
         test_filepath = os.path.join(dataset_storage_dir, build_dataset_name(1))
