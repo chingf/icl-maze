@@ -5,7 +5,8 @@ import matplotlib.pyplot as plt
 import torch
 from IPython import embed
 
-from src.evals import eval_darkroom
+from src.evals.eval_darkroom import EvalDarkroom
+from src.evals.eval_maze import EvalMaze
 from src.utils import (
     build_env_name,
     build_model_name,
@@ -44,7 +45,7 @@ def main(cfg: DictConfig):
     model_name = build_model_name(model_config, optimizer_config)
     dataset_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/datasets'
     model_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/models/{model_name}'
-    eval_dset_path = os.path.join(dataset_storage_dir, build_dataset_name(2))
+    eval_dset_path = os.path.join(dataset_storage_dir, build_dataset_name(0))
 
     # Resume wandb run from training
     try:
@@ -84,80 +85,91 @@ def main(cfg: DictConfig):
             'n_eval': n_eval,
             'dim': env_config['dim'],
         }
-        #eval_darkroom.online(eval_trajs, model, **config)
-        #fig = plt.gcf()
-        #wandb_logger.experiment.log({"online_performance": wandb.Image(fig)}) 
-        #plt.clf()
-
-        #eval_darkroom.online(eval_trajs, model, random_buffer=True, **config)
-        #fig = plt.gcf()
-        #wandb_logger.experiment.log({"online_performance_random_buffer": wandb.Image(fig)}) 
-        #plt.clf()
-
-        #eval_darkroom.long_online(eval_trajs, model, **config)
-        #fig = plt.gcf()
-        #wandb_logger.experiment.log({"online_performance_long_context": wandb.Image(fig)}) 
-        #plt.clf()
-
-        #  TODO: Do this per context length, and show bar for the final context length
-        del config['Heps']
-        del config['H']
-        config['n_eval'] = n_eval
-        horizon = config['horizon']
-        results = {
-            'model': [],
-            'return': [],
-            'environment': [],
-            'experienced_reward': [],
-            'context_length': []
+        eval_func = EvalDarkroom()
+    elif env_config['env'] == 'maze':
+        H = cfg.H if cfg.H > 0 else env_config['horizon']
+        config = {
+            'Heps': 40,
+            'horizon': env_config['horizon'],  # Horizon in an episode
+            'H': H,  # Number of episodes to keep in context. TODO: not really used?
+            'n_eval': n_eval,
+            'layers': env_config['layers'],
         }
-        for _h in np.arange(0, horizon + 1, 2):
 
-            # Generate truncated trajectories
-            _eval_trajs = []
-            for traj in eval_trajs:
-                _traj = {}
-                for k in traj.keys():
-                    val = traj[k][:_h] if 'context' in k else traj[k]
-                    _traj[k] = val
-                _eval_trajs.append(_traj)
-            experienced_rewards = [
-                np.sum(_traj['context_rewards']).item() for _traj in _eval_trajs]
+        eval_func = EvalMaze()
 
-            # Evaluate offline
-            _returns = eval_darkroom.offline(_eval_trajs, model, plot=True, **config)
-            for model_name, model_returns in _returns.items():
-                model_returns = model_returns.tolist()
-                results['model'].extend([model_name] * n_eval)
-                results['return'].extend(model_returns)
-                results['environment'].extend([i for i in range(n_eval)])
-                results['experienced_reward'].extend(experienced_rewards[:n_eval])
-                results['context_length'].extend([_h]*n_eval)
+    #eval_func.online(eval_trajs, model, config)
+    #fig = plt.gcf()
+    #wandb_logger.experiment.log({"online_performance": wandb.Image(fig)}) 
+    #plt.clf()
 
-            # Save performance when given full experience buffer
-            if _h == horizon:
-                fig = plt.gcf()
-                wandb_logger.experiment.log(
-                    {"offline_performance_horizon_{}".format(_h): wandb.Image(fig)}) 
-            plt.clf()
+    #eval_func.online(eval_trajs, model, config, random_buffer=True,)
+    #fig = plt.gcf()
+    #wandb_logger.experiment.log({"online_performance_random_buffer": wandb.Image(fig)}) 
+    #plt.clf()
 
-        results = pd.DataFrame(results)
+    #eval_func.long_online(eval_trajs, model, config)
+    #fig = plt.gcf()
+    #wandb_logger.experiment.log({"online_performance_long_context": wandb.Image(fig)}) 
+    #plt.clf()
 
-        fig, ax = plt.subplots()
-        sns.lineplot(
-            data=results, x='context_length', y='return', hue='model',
-            units='environment', estimator=None, ax=ax, alpha=0.5)
-        plt.legend()
-        wandb_logger.experiment.log({"offline_performance_horizon_comparison": wandb.Image(fig)}) 
+    del config['Heps']
+    del config['H']
+    config['n_eval'] = n_eval
+    horizon = config['horizon']
+    results = {
+        'model': [],
+        'return': [],
+        'environment': [],
+        'experienced_reward': [],
+        'context_length': []
+    }
+    for _h in [horizon]: #np.arange(0, horizon + 1, 2):
+        # Generate truncated trajectories
+        _eval_trajs = []
+        for traj in eval_trajs:
+            _traj = {}
+            for k in traj.keys():
+                val = traj[k][:_h] if 'context' in k else traj[k]
+                _traj[k] = val
+            _eval_trajs.append(_traj)
+        experienced_rewards = [
+            np.sum(_traj['context_rewards']).item() for _traj in _eval_trajs]
+
+        # Evaluate offline
+        _returns = eval_func.offline(_eval_trajs, model, config, plot=True)
+        for model_name, model_returns in _returns.items():
+            model_returns = model_returns.tolist()
+            results['model'].extend([model_name] * n_eval)
+            results['return'].extend(model_returns)
+            results['environment'].extend([i for i in range(n_eval)])
+            results['experienced_reward'].extend(experienced_rewards[:n_eval])
+            results['context_length'].extend([_h]*n_eval)
+
+        # Save performance when given full experience buffer
+        if _h == horizon:
+            fig = plt.gcf()
+            wandb_logger.experiment.log(
+                {"offline_performance_horizon_{}".format(_h): wandb.Image(fig)}) 
         plt.clf()
 
-        fig, ax = plt.subplots()
-        sns.lineplot(
-            data=results, x='experienced_reward', y='return',
-            hue='model', ax=ax)
-        plt.legend()
-        wandb_logger.experiment.log({"offline_performance_reward_comparison": wandb.Image(fig)}) 
-        plt.clf()
+    results = pd.DataFrame(results)
+
+    fig, ax = plt.subplots()
+    sns.lineplot(
+        data=results, x='context_length', y='return', hue='model',
+        units='environment', estimator=None, ax=ax, alpha=0.5)
+    plt.legend()
+    wandb_logger.experiment.log({"offline_performance_horizon_comparison": wandb.Image(fig)}) 
+    plt.clf()
+
+    fig, ax = plt.subplots()
+    sns.lineplot(
+        data=results, x='experienced_reward', y='return',
+        hue='model', ax=ax)
+    plt.legend()
+    wandb_logger.experiment.log({"offline_performance_reward_comparison": wandb.Image(fig)}) 
+    plt.clf()
 
 if __name__ == '__main__':
     main()
