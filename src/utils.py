@@ -39,17 +39,35 @@ def find_ckpt_file(ckpt_dir, epoch):
             raise ValueError(f"No checkpoint found for epoch {epoch}")
         ckpt_name = os.path.basename(matching_files[0])
     else:
-        ckpt_name = 'last.ckpt'  # Use last checkpoint if epoch not specified
+        # Check for versioned 'last' checkpoints (last-v1, last-v2, etc)
+        last_pattern = f'{ckpt_dir}/last-v*.ckpt'
+        versioned_files = glob.glob(last_pattern)
+        if versioned_files:
+            # Extract version numbers and find highest
+            versions = []
+            for f in versioned_files:
+                v = int(f.split('last-v')[1].split('.ckpt')[0])
+                versions.append(v)
+            highest_version = max(versions)
+            ckpt_name = f'last-v{highest_version}.ckpt'
+        else:
+            ckpt_name = 'last.ckpt'  # Use last checkpoint if epoch not specified
     return ckpt_name
     
 ## Filename generation
 
 def build_env_name(env_config):
     env_filename = env_config['env']
-    env_filename += '_envs' + str(env_config['n_envs'])
-    env_filename += '_H' + str(env_config['horizon'])
-    env_filename += '_d' + str(env_config['dim'])
-    env_filename += '_' + env_config['rollin_type']
+    if env_filename == 'maze':
+        env_filename += '_layers' + str(env_config['layers'])
+        env_filename += '_envs' + str(env_config['n_envs'])
+        env_filename += '_H' + str(env_config['horizon'])
+        env_filename += '_' + env_config['rollin_type']
+    elif env_filename == 'darkroom':
+        env_filename += '_dim' + str(env_config['dim'])
+        env_filename += '_envs' + str(env_config['n_envs'])
+        env_filename += '_H' + str(env_config['horizon'])
+        env_filename += '_' + env_config['rollin_type']
     return env_filename
 
 def build_model_name(model_config, optimizer_config):
@@ -57,9 +75,9 @@ def build_model_name(model_config, optimizer_config):
     model_filename += '_embd' + str(model_config['n_embd'])
     model_filename += '_layer' + str(model_config['n_layer'])
     model_filename += '_head' + str(model_config['n_head'])
-    model_filename += '_do' + str(model_config['dropout'])
     model_filename += '_lr' + str(optimizer_config['lr'])
     model_filename += '_batch' + str(optimizer_config['batch_size'])
+    return model_filename
 
 def build_dataset_name(mode):
     if mode == 0:
@@ -69,61 +87,3 @@ def build_dataset_name(mode):
     elif mode == 2:
         filename = 'eval'
     return filename + '.pkl'
-
-## Old
-
-#def build_data_filename(env_config, mode, storage_dir=None):
-#    if env_config['env'] == 'darkroom':
-#        filename = build_darkroom_data_filename(env_config, mode)
-#        if storage_dir is not None:
-#            filename = os.path.join(storage_dir, filename)
-#        return filename
-#    else:
-#        raise NotImplementedError
-#    
-#def build_model_filename(env_config, model_config, optimizer_config):
-#    if env_config['env'] == 'darkroom':
-#        return build_darkroom_model_filename(env_config, model_config, optimizer_config)
-#    else:
-#        raise NotImplementedError
-#
-#def build_darkroom_data_filename(env_config, mode):
-#    """
-#    Builds the filename for the darkroom data.
-#    Mode is either 0: train, 1: test, 2: eval.
-#    """
-#    filename = env_config['env']
-#    filename += '_envs' + str(env_config['n_envs'])
-#    filename += '_H' + str(env_config['horizon'])
-#    filename += '_d' + str(env_config['dim'])
-#    filename += '_' + env_config['rollin_type']
-#    if mode == 0:
-#        filename += '_train'
-#    elif mode == 1:
-#        filename += '_test'
-#    elif mode == 2:
-#        filename += '_eval'
-#        
-#    return filename + '.pkl'
-#
-#
-#def build_darkroom_model_filename(env_config, model_config, optimizer_config):
-#    """
-#    Builds the filename for the darkroom model.
-#    """
-#
-#    env_filename = env_config['env']
-#    env_filename += '_envs' + str(env_config['n_envs'])
-#    env_filename += '_H' + str(env_config['horizon'])
-#    env_filename += '_d' + str(env_config['dim'])
-#    env_filename += '_' + env_config['rollin_type']
-#
-#    model_filename = model_config['name']
-#    model_filename += '_embd' + str(model_config['n_embd'])
-#    model_filename += '_layer' + str(model_config['n_layer'])
-#    model_filename += '_head' + str(model_config['n_head'])
-#    model_filename += '_do' + str(model_config['dropout'])
-#    model_filename += '_lr' + str(optimizer_config['lr'])
-#    model_filename += '_batch' + str(optimizer_config['batch_size'])
-#
-#    return env_filename + '/' + model_filename
