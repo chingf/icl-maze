@@ -1,5 +1,8 @@
 defaults:
-  - env: darkroom
+  - env: maze
   - _self_
+
+wandb:
+  project: test_maze 
 
 storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze

@@ -1,11 +1,11 @@
 defaults:
   - model: transformer
-  - env: darkroom
+  - env: maze
   - optimizer: default
   - _self_
 
 wandb:
-  project: darkroom_NoPosEmbedding
+  project: test_maze 
 
 seed: 0
 storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze

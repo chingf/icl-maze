@@ -1,14 +1,14 @@
 defaults:
   - model: transformer
-  - env: darkroom
+  - env: maze
   - optimizer: default  # For finding the relevant trained model
   - _self_
 
 wandb:
-  project: darkroom_NoPosEmbedding
+  project: test_maze 
 
 seed: 0
-epoch: best
+epoch: -1 #best
 H: -1
 n_eval: 20
 storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze

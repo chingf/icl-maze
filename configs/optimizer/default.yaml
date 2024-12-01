@@ -1,5 +1,5 @@
-lr: 1e-3
-num_epochs: 600
+lr: 1e-4
+num_epochs: 1000
 batch_size: 8192
 weight_decay: 1e-4
 early_stopping_patience: 10
