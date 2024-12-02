@@ -5,7 +5,7 @@ defaults:
   - _self_
 
 wandb:
-  project: test_maze 
+  project: test_maze_2
 
 seed: 0
 storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze

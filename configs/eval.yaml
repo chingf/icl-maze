@@ -5,10 +5,10 @@ defaults:
   - _self_
 
 wandb:
-  project: test_maze 
+  project: test_maze_2
 
 seed: 0
-epoch: -1 #best
+epoch: best
 H: -1
 n_eval: 20
 storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze
