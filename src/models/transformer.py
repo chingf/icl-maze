@@ -88,7 +88,7 @@ class Transformer(pl.LightningModule):
             indices = torch.tensor([preds.shape[1] - 1]).to(preds.device)
         else:
             indices = torch.cat([
-                torch.tensor([0]), torch.arange(5, preds.shape[1], 5)]
+                torch.tensor([0]), torch.arange(10, preds.shape[1], 10)]
             ).to(preds.device)
         preds_subset = torch.index_select(preds, 1, indices)
         return preds_subset
@@ -112,15 +112,23 @@ class Transformer(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         batch_size = batch['query_states'].shape[0]
         loss, accuracy = self.batch_forward(batch, batch_idx)
-        self.log('train_loss', loss/batch_size, on_epoch=True, prog_bar=True)
-        self.log('train_accuracy', accuracy, on_epoch=True, prog_bar=True)
+        self.log(
+            'train_loss', loss/batch_size,
+            on_epoch=True, on_step=False, prog_bar=True)
+        self.log(
+            'train_accuracy', accuracy,
+            on_epoch=True, on_step=False, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         batch_size = batch['query_states'].shape[0]
         loss, accuracy = self.batch_forward(batch, batch_idx)
-        self.log('val_loss', loss/batch_size, on_epoch=True, prog_bar=True)
-        self.log('val_accuracy', accuracy, on_epoch=True, prog_bar=True)
+        self.log(
+            'val_loss', loss/batch_size,
+            on_epoch=True, on_step=False, prog_bar=True)
+        self.log(
+            'val_accuracy', accuracy,
+            on_epoch=True, on_step=False, prog_bar=True)
         return loss
 
     def configure_optimizers(self):
