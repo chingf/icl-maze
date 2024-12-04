@@ -1,11 +1,11 @@
 defaults:
   - model: transformer
-  - env: maze
+  - env: tree
   - optimizer: default
   - _self_
 
 wandb:
-  project: test_maze_2
+  project: test_tree
 
 seed: 0
 storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze

@@ -1,8 +1,8 @@
 defaults:
-  - env: maze
+  - env: tree
   - _self_
 
 wandb:
-  project: test_maze 
+  project: test_tree
 
 storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze
