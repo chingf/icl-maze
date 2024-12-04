@@ -13,6 +13,40 @@ class MazeEnv(BaseEnv):
         self.horizon = horizon
         self.state_dim = 2
         self.action_dim = 4  # (back, left, right, stay)
+        self.optimal_action_map = None
+
+    def make_opt_action_dict(self):
+        """Creates a dictionary mapping (current_node, target_leaf) to optimal action."""
+        opt_actions = {}
+        target_layer, target_pos = self.goal
+        for layer in range(self.layers):
+            for pos in range(2**layer):
+                # Iterate over all possible leaf nodes
+                target_layer = self.layers -1
+                for target_pos in range(2**target_layer):
+                    if layer > target_layer:
+                        action = 0
+                    elif layer < target_layer:
+                        layer_diff = target_layer - layer
+                        left_tree_start_node = (2**(layer_diff-1))*(2*pos)
+                        right_tree_start_node = (2**(layer_diff-1))*(2*pos+1)
+                        left_tree_end_node = left_tree_start_node + (2**(layer_diff-1)-1)
+                        right_tree_end_node = right_tree_start_node + (2**(layer_diff-1)-1)
+                        if target_pos >= left_tree_start_node\
+                            and target_pos <= left_tree_end_node:
+                            action = 1  # Left
+                        elif target_pos >= right_tree_start_node\
+                            and target_pos <= right_tree_end_node:
+                            action = 2  # Right
+                        else:
+                            action = 0  # Backtrack
+                    elif layer == target_layer:
+                        if pos == target_pos:
+                            action = 3 # Stay
+                        else:
+                            action = 0 #  Backtrack
+                    opt_actions[(layer, pos, target_layer, target_pos)] = action
+        return opt_actions
 
     def sample_state(self):
         layer = np.random.randint(0, self.layers)
@@ -71,26 +105,12 @@ class MazeEnv(BaseEnv):
         return self.state.copy()
     
     def opt_action(self, state):
-        if state[0] > self.goal[0]:
-            action = 0
-        elif state[0] < self.goal[0]:
-            layer_diff = self.goal[0] - state[0]
-            left_tree_start_node = (2**(layer_diff-1))*(2*state[1])
-            right_tree_start_node = (2**(layer_diff-1))*(2*state[1]+1)
-            left_tree_end_node = left_tree_start_node + (2**(layer_diff-1)-1)
-            right_tree_end_node = right_tree_start_node + (2**(layer_diff-1)-1)
-            goal_node = self.goal[1]
-            if goal_node >= left_tree_start_node and goal_node <= left_tree_end_node:
-                action = 1  # Left
-            elif goal_node >= right_tree_start_node and goal_node <= right_tree_end_node:
-                action = 2  # Right
-            else:
-                action = 0  # Backtrack
-        elif state[0] == self.goal[0]:
-            if state[1] == self.goal[1]:
-                action = 3 # Stay
-            else:
-                action = 0 #  Backtrack
+        if self.optimal_action_map is None:
+            self.optimal_action_map = self.make_opt_action_dict()
+        target_layer, target_pos = self.goal
+        current_layer, current_pos = state
+        action = self.optimal_action_map[
+            (current_layer, current_pos, target_layer, target_pos)]
         zeros = np.zeros(self.action_dim)
         zeros[action] = 1
         return zeros
