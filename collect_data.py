@@ -12,6 +12,7 @@ from omegaconf import DictConfig, OmegaConf
 
 from src.envs.darkroom_env import DarkroomEnv
 from src.envs.maze_env import MazeEnv
+from src.envs.trees import TreeEnv
 from src.utils import (
     build_env_name,
     build_dataset_name,
@@ -49,16 +50,17 @@ def generate_history(env, rollin_type):
 
     return states, actions, next_states, rewards
 
-def generate_histories_from_envs(envs, env_config):
+def generate_multiple_histories(env_class, env_configs, rollin_type):
     """ Makes a list of trajectories from a list of environments. """
     trajs = []
-    for env in envs:  # TODO: can double up with n_hists and n_samples
+    for env_config in env_configs:
+        env = env_class(**env_config)
         (
             context_states,
             context_actions,
             context_next_states,
             context_rewards,
-        ) = generate_history(env, env_config['rollin_type'])
+        ) = generate_history(env, rollin_type)
         query_state = env.sample_state()
         optimal_action = env.opt_action(query_state)
         traj = {
@@ -70,21 +72,9 @@ def generate_histories_from_envs(envs, env_config):
             'context_rewards': context_rewards,
             'goal': env.goal,
         }
+        if env_class == TreeEnv:
+            traj['initialization_seed'] = env.initialization_seed
         trajs.append(traj)
-    return trajs
-
-def generate_darkroom_histories(goals, env_config):
-    """ Creates darkroom environments and then makes trajectories. """
-    envs = [DarkroomEnv(
-        env_config['dim'], goal, env_config['horizon']) for goal in goals]
-    trajs = generate_histories_from_envs(envs, env_config)
-    return trajs
-
-def generate_maze_histories(goals, env_config):
-    """ Creates darkroom environments and then makes trajectories. """
-    envs = [MazeEnv(
-        env_config['layers'], goal, env_config['horizon']) for goal in goals]
-    trajs = generate_histories_from_envs(envs, env_config)
     return trajs
 
 
@@ -94,6 +84,7 @@ def main(cfg: DictConfig):
     random.seed(0)
     env_config = OmegaConf.to_container(cfg.env, resolve=True)
     env_name = build_env_name(env_config)
+    rollin_type = env_config['rollin_type']
     dataset_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/datasets'
     os.makedirs(dataset_storage_dir, exist_ok=True)
 
@@ -110,17 +101,22 @@ def main(cfg: DictConfig):
         train_goals = goals[:split_idx_1]
         test_goals = goals[split_idx_1:split_idx_2]
         eval_goals = goals[split_idx_2:]
-        eval_goals = np.repeat(eval_goals, n_repeats, axis=0)
-        train_goals = np.repeat(train_goals, n_repeats, axis=0)
-        test_goals = np.repeat(test_goals, n_repeats, axis=0)
 
-        train_trajs = generate_darkroom_histories(train_goals, env_config)
-        test_trajs = generate_darkroom_histories(test_goals, env_config)
-        eval_trajs = generate_darkroom_histories(eval_goals, env_config)
+        env_configs = [{
+            'dim': env_config['dim'], 'goal': goal, 'horizon': env_config['horizon']
+            } for goal in np.repeat(train_goals, n_repeats, axis=0)]
+        train_trajs = generate_multiple_histories(DarkroomEnv, env_configs, rollin_type)
 
-        train_filepath = os.path.join(dataset_storage_dir, build_dataset_name(0))
-        test_filepath = os.path.join(dataset_storage_dir, build_dataset_name(1))
-        eval_filepath = os.path.join(dataset_storage_dir, build_dataset_name(2))
+        env_configs = [{
+            'dim': env_config['dim'], 'goal': goal, 'horizon': env_config['horizon']
+            } for goal in np.repeat(test_goals, n_repeats, axis=0)]
+        test_trajs = generate_multiple_histories(DarkroomEnv, env_configs, rollin_type)
+
+        env_configs = [{
+            'dim': env_config['dim'], 'goal': goal, 'horizon': env_config['horizon']
+            } for goal in np.repeat(eval_goals, n_repeats, axis=0)]
+        eval_trajs = generate_multiple_histories(DarkroomEnv, env_configs, rollin_type)
+
     elif env_config['env'] == 'maze':
         layers = env_config['layers']
         goals = [(layers-1, p) for p in range(2**(layers-1))]
@@ -133,20 +129,65 @@ def main(cfg: DictConfig):
         train_goals = goals[:split_idx_1]
         test_goals = goals[split_idx_1:split_idx_2]
         eval_goals = goals[split_idx_2:]
-        train_goals = np.tile(train_goals, (n_repeats, 1))
-        test_goals = np.tile(test_goals, (n_repeats, 1))
-        eval_goals = np.tile(eval_goals, (n_repeats, 1))
 
-        train_trajs = generate_maze_histories(train_goals, env_config)
-        test_trajs = generate_maze_histories(test_goals, env_config)
-        eval_trajs = generate_maze_histories(eval_goals, env_config)
+        env_configs = [{
+            'layers': env_config['layers'], 'goal': goal, 'horizon': env_config['horizon']
+            } for goal in np.tile(train_goals, (n_repeats, 1))]
+        train_trajs = generate_multiple_histories(MazeEnv, env_configs, rollin_type)
 
-        train_filepath = os.path.join(dataset_storage_dir, build_dataset_name(0))
-        test_filepath = os.path.join(dataset_storage_dir, build_dataset_name(1))
-        eval_filepath = os.path.join(dataset_storage_dir, build_dataset_name(2))
+        env_configs = [{
+            'layers': env_config['layers'], 'goal': goal, 'horizon': env_config['horizon']
+            } for goal in np.tile(test_goals, (n_repeats, 1))]
+        test_trajs = generate_multiple_histories(MazeEnv, env_configs, rollin_type)
+
+        env_configs = [{
+            'layers': env_config['layers'], 'goal': goal, 'horizon': env_config['horizon']
+            } for goal in np.tile(eval_goals, (n_repeats, 1))]
+        eval_trajs = generate_multiple_histories(MazeEnv, env_configs, rollin_type)
+
+    elif env_config['env'] == 'tree':
+        unique_seeds_path = dataset_storage_dir + '/unique_seeds.pkl'
+        n_envs = env_config['n_envs']
+        with open(unique_seeds_path, 'rb') as f:
+            unique_seeds = pickle.load(f)
+        n_unique_seeds = len(unique_seeds)
+        n_repeats = n_envs // n_unique_seeds
+        split_idx_1 = int(.8 * n_unique_seeds)
+        split_idx_2 = int(.9 * n_unique_seeds)
+        train_seeds = unique_seeds[:split_idx_1]
+        test_seeds = unique_seeds[split_idx_1:split_idx_2]
+        eval_seeds = unique_seeds[split_idx_2:]
+
+        env_configs = [{
+            'max_layers': env_config['max_layers'],
+            'initialization_seed': s,
+            'horizon': env_config['horizon'],
+            'branching_prob': env_config['branching_prob']
+            } for s in np.tile(train_seeds, (n_repeats))]
+        train_trajs = generate_multiple_histories(TreeEnv, env_configs, rollin_type)
+
+        env_configs = [{
+            'max_layers': env_config['max_layers'],
+            'initialization_seed': s,
+            'horizon': env_config['horizon'],
+            'branching_prob': env_config['branching_prob']
+            } for s in np.tile(test_seeds, (n_repeats))]
+        test_trajs = generate_multiple_histories(TreeEnv, env_configs, rollin_type)
+
+        env_configs = [{
+            'max_layers': env_config['max_layers'],
+            'initialization_seed': s,
+            'horizon': env_config['horizon'],
+            'branching_prob': env_config['branching_prob']
+            } for s in np.tile(eval_seeds, (n_repeats))]
+        eval_trajs = generate_multiple_histories(TreeEnv, env_configs, rollin_type)
+
     else:
         raise NotImplementedError
 
+    train_filepath = os.path.join(dataset_storage_dir, build_dataset_name(0))
+    test_filepath = os.path.join(dataset_storage_dir, build_dataset_name(1))
+    eval_filepath = os.path.join(dataset_storage_dir, build_dataset_name(2))
     with open(train_filepath, 'wb') as file:
         pickle.dump(train_trajs, file)
         print(f"Saved to {train_filepath}.")
