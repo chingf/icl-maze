@@ -3,6 +3,6 @@ defaults:
   - _self_
 
 wandb:
-  project: test_tree
+  project: test_tree_2
 
 storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze
