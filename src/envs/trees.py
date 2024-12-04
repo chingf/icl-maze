@@ -54,6 +54,7 @@ class TreeEnv(BaseEnv):
         self.goal = self.sample_goal()
         np.random.seed()
         self.optimal_action_map = None
+        self.dist_from_goal = None
 
     def _generate_random_tree(self):
         """Generates a random tree structure"""
@@ -98,9 +99,16 @@ class TreeEnv(BaseEnv):
         a[i] = 1
         return a
 
-    def reset(self):
+    def reset(self, from_origin=False):
         self.current_step = 0
-        self.state = np.array([0, 0])
+        if from_origin:
+            self.state = np.array([0, 0])
+        else:
+            while True:
+                state = self.sample_state()
+                if self.dist_from_goal[tuple(state.tolist())] >= self.max_layers:
+                    break
+            self.state = state
         return self.state
 
     def make_opt_action_dict(self):
@@ -113,11 +121,13 @@ class TreeEnv(BaseEnv):
         visited = set()
         visited.add(target_node.encoding())
         opt_action_map = {target_node.encoding(): 3}
+        dist_from_goal = {target_node.encoding(): 0}
         
         while queue:
             current_node = queue.pop(0)
             _current = current_node.encoding()
-            
+            current_dist = dist_from_goal[_current]
+
             # Check parent (action = 0)
             if current_node.parent:
                 _parent = current_node.parent.encoding()
@@ -127,6 +137,7 @@ class TreeEnv(BaseEnv):
                         opt_action_map[_parent] = 1
                     else:
                         opt_action_map[_parent] = 2
+                    dist_from_goal[_parent] = current_dist + 1
                     queue.append(current_node.parent)
             
             # Check left child (action = 1)
@@ -135,6 +146,7 @@ class TreeEnv(BaseEnv):
                 if _left not in visited:
                     visited.add(_left)
                     opt_action_map[_left] = 0
+                    dist_from_goal[_left] = current_dist + 1
                     queue.append(current_node.left)
             
             # Check right child (action = 2)
@@ -143,16 +155,19 @@ class TreeEnv(BaseEnv):
                 if _right not in visited:
                     visited.add(_right)
                     opt_action_map[_right] = 0
+                    dist_from_goal[_right] = current_dist + 1
                     queue.append(current_node.right)
         
-        return opt_action_map
+        return opt_action_map, dist_from_goal
 
     def opt_action(self, state):
         """Returns optimal action to reach target (self.goal)"""
         if self.optimal_action_map is None:
-            self.optimal_action_map = self.make_opt_action_dict()
+            self.optimal_action_map, self.dist_from_goal = self.make_opt_action_dict()
 
-        action = self.optimal_action_map[tuple(state.tolist())] 
+        if not isinstance(state, list):
+            state = state.tolist()
+        action = self.optimal_action_map[tuple(state)] 
         zeros = np.zeros(self.action_dim)
         zeros[action] = 1
         return zeros
@@ -160,7 +175,9 @@ class TreeEnv(BaseEnv):
     def transit(self, state, action):
         action = np.argmax(action)
         assert action in np.arange(self.action_dim)
-        current_node = self.node_map[tuple(state.tolist())]
+        if not isinstance(state, list):
+            state = state.tolist()
+        current_node = self.node_map[tuple(state)]
         if action == 0:  # Back
             if current_node.parent:
                 state = current_node.parent.encoding()
@@ -173,7 +190,7 @@ class TreeEnv(BaseEnv):
         elif action == 3:  # Stay
             pass
         reward = 1 if np.all(state == self.goal) else 0
-        return state, reward
+        return [state[0], state[1]], reward
 
     def step(self, action):
         if self.current_step >= self.horizon:
