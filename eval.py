@@ -45,7 +45,7 @@ def main(cfg: DictConfig):
     model_name = build_model_name(model_config, optimizer_config)
     dataset_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/datasets'
     model_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/models/{model_name}'
-    eval_dset_path = os.path.join(dataset_storage_dir, build_dataset_name(0))
+    eval_dset_path = os.path.join(dataset_storage_dir, build_dataset_name(2))
 
     # Resume wandb run from training
     try:
@@ -124,7 +124,7 @@ def main(cfg: DictConfig):
         'experienced_reward': [],
         'context_length': []
     }
-    for _h in [horizon]: #np.arange(0, horizon + 1, 2):
+    for _h in np.arange(0, horizon + 1, 10):
         # Generate truncated trajectories
         _eval_trajs = []
         for traj in eval_trajs:
