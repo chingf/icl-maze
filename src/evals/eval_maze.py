@@ -21,7 +21,7 @@ class EvalMaze(EvalDarkroom):
     def __init__(self):
         pass
 
-    def create_env(self, config, goal):
+    def create_env(self, config, goal, i_eval):
         layers = config['layers']
         horizon = config['horizon']
         return MazeEnv(layers, goal, horizon)

@@ -7,6 +7,7 @@ from IPython import embed
 
 from src.evals.eval_darkroom import EvalDarkroom
 from src.evals.eval_maze import EvalMaze
+from src.evals.eval_trees import EvalTrees
 from src.utils import (
     build_env_name,
     build_model_name,
@@ -95,8 +96,18 @@ def main(cfg: DictConfig):
             'n_eval': n_eval,
             'layers': env_config['layers'],
         }
-
         eval_func = EvalMaze()
+    elif env_config['env'] == 'tree':
+        H = cfg.H if cfg.H > 0 else env_config['horizon']
+        config = {
+            'Heps': 40,
+            'horizon': env_config['horizon'],  # Horizon in an episode
+            'H': H,  # Number of episodes to keep in context. TODO: not really used?
+            'n_eval': n_eval,
+            'max_layers': env_config['max_layers'],
+            'branching_prob': env_config['branching_prob'],
+        }
+        eval_func = EvalTrees()
 
     #eval_func.online(eval_trajs, model, config)
     #fig = plt.gcf()

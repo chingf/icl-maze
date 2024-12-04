@@ -19,14 +19,13 @@ class EvalDarkroom:
     def __init__(self):
         pass
 
-    def create_env(self, config, goal):
+    def create_env(self, config, goal, i_eval):
         dim = config['dim']
         horizon = config['horizon']
         return DarkroomEnv(dim, goal, horizon)
 
     def create_vec_env(self, envs):
         return DarkroomEnvVec(envs)
-
 
     def deploy_online_vec_long_context(self, vec_env, controller, config):
         Heps = config['Heps']
@@ -360,7 +359,7 @@ class EvalDarkroom:
                 'context_rewards': convert_to_tensor(traj['context_rewards'][None, :, None]),
             }
 
-            env = self.create_env(config, traj['goal'])
+            env = self.create_env(config, traj['goal'], i_eval)
 
             true_opt = OptPolicy(env)
             true_opt.set_batch(batch)
