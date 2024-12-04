@@ -68,6 +68,12 @@ def build_env_name(env_config):
         env_filename += '_envs' + str(env_config['n_envs'])
         env_filename += '_H' + str(env_config['horizon'])
         env_filename += '_' + env_config['rollin_type']
+    elif env_filename == 'tree':
+        env_filename += '_layers' + str(env_config['max_layers'])
+        env_filename += '_bprob' + str(env_config['branching_prob'])
+        env_filename += '_envs' + str(env_config['n_envs'])
+        env_filename += '_H' + str(env_config['horizon'])
+        env_filename += '_' + env_config['rollin_type']
     return env_filename
 
 def build_model_name(model_config, optimizer_config):
@@ -87,3 +93,57 @@ def build_dataset_name(mode):
     elif mode == 2:
         filename = 'eval'
     return filename + '.pkl'
+
+
+## Environment Visualizers
+def print_tree(tree):
+    """Prints a visual ASCII representation of the tree structure."""
+
+    height = tree.max_layers
+    width = (2 ** (height)) * 4
+    
+    # Process nodes level by level
+    queue = [(tree.root, 0, width // 2)]  # (node, level, horizontal_position)
+    current_level = 0
+    level_nodes = []
+    
+    while queue:
+        node, level, pos = queue.pop(0)
+        
+        if (level != current_level) and (len(level_nodes) > 0):
+            line = " " * width # Print the current level's nodes
+            for n, p in level_nodes:
+                node_str = str(n)
+                # Center the node string around position p
+                start_pos = max(0, p - len(node_str) // 2)
+                line = line[:start_pos] + node_str + line[start_pos + len(node_str):]
+            print(line)
+
+            line = " " * width # Print connecting lines
+            for n, p in level_nodes:
+                if n.left:
+                    line = line[:p-2] + "/" + line[p-1:]
+                if n.right:
+                    line = line[:p+1] + "\\" + line[p+2:]
+            print(line)
+            
+            level_nodes = []
+            current_level = level
+        
+        level_nodes.append((node, pos))
+        
+        # Calculate positions for children
+        spacing = width // (2 ** (level + 2))
+        if node.left:
+            queue.append((node.left, level + 1, pos - spacing))
+        if node.right:
+            queue.append((node.right, level + 1, pos + spacing))
+    
+    # Print the last level
+    if len(level_nodes) > 0:
+        line = " " * width
+        for n, p in level_nodes:
+            node_str = str(n)
+            start_pos = max(0, p - len(node_str) // 2)
+            line = line[:start_pos] + node_str + line[start_pos + len(node_str):]
+        print(line)
