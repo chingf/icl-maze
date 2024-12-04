@@ -100,6 +100,7 @@ class TreeEnv(BaseEnv):
         return a
 
     def reset(self, from_origin=False):
+        self.optimal_action_map, self.dist_from_goal = self.make_opt_action_dict()
         self.current_step = 0
         if from_origin:
             self.state = np.array([0, 0])
