@@ -142,7 +142,7 @@ class Transformer(pl.LightningModule):
                 optimizer,
                 start_factor=1.0,  # Start at 1e-3 (10x higher than final 1e-4) 
                 end_factor=0.1,     # End at 1e-4
-                total_iters=100,      # Linear decrease over 75 epochs
+                total_iters=50,      # Linear decrease over 50 epochs
             ),
             'monitor': 'val_loss',
         }
