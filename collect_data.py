@@ -28,7 +28,7 @@ def generate_history(env, rollin_type):
 
     state = env.sample_state()
     if rollin_type == 'explore':
-        env.update_exploration_buffer(None, next_state)
+        env.update_exploration_buffer(None, state)
     for _ in range(env.horizon):
         if rollin_type == 'uniform':
             state = env.sample_state()
