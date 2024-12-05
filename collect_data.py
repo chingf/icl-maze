@@ -27,15 +27,22 @@ def generate_history(env, rollin_type):
     rewards = []
 
     state = env.sample_state()
+    if rollin_type == 'explore':
+        env.update_exploration_buffer(None, next_state)
     for _ in range(env.horizon):
         if rollin_type == 'uniform':
             state = env.sample_state()
             action = env.sample_action()
         elif rollin_type == 'expert':
             action = env.opt_action(state)
+        elif rollin_type == 'explore':
+            action = env.explore_action()
         else:
             raise NotImplementedError
         next_state, reward = env.transit(state, action)
+
+        if rollin_type == 'explore':
+            env.update_exploration_buffer(action, next_state)
 
         states.append(state)
         actions.append(action)
@@ -106,16 +113,19 @@ def main(cfg: DictConfig):
             'dim': env_config['dim'], 'goal': goal, 'horizon': env_config['horizon']
             } for goal in np.repeat(train_goals, n_repeats, axis=0)]
         train_trajs = generate_multiple_histories(DarkroomEnv, env_configs, rollin_type)
+        print('Generated train trajectories.')
 
         env_configs = [{
             'dim': env_config['dim'], 'goal': goal, 'horizon': env_config['horizon']
             } for goal in np.repeat(test_goals, n_repeats, axis=0)]
         test_trajs = generate_multiple_histories(DarkroomEnv, env_configs, rollin_type)
+        print('Generated test trajectories.')
 
         env_configs = [{
             'dim': env_config['dim'], 'goal': goal, 'horizon': env_config['horizon']
             } for goal in np.repeat(eval_goals, n_repeats, axis=0)]
         eval_trajs = generate_multiple_histories(DarkroomEnv, env_configs, rollin_type)
+        print('Generated eval trajectories.')
 
     elif env_config['env'] == 'maze':
         layers = env_config['layers']
@@ -134,29 +144,31 @@ def main(cfg: DictConfig):
             'layers': env_config['layers'], 'goal': goal, 'horizon': env_config['horizon']
             } for goal in np.tile(train_goals, (n_repeats, 1))]
         train_trajs = generate_multiple_histories(MazeEnv, env_configs, rollin_type)
+        print('Generated train trajectories.')
 
         env_configs = [{
             'layers': env_config['layers'], 'goal': goal, 'horizon': env_config['horizon']
             } for goal in np.tile(test_goals, (n_repeats, 1))]
         test_trajs = generate_multiple_histories(MazeEnv, env_configs, rollin_type)
+        print('Generated test trajectories.')
 
         env_configs = [{
             'layers': env_config['layers'], 'goal': goal, 'horizon': env_config['horizon']
             } for goal in np.tile(eval_goals, (n_repeats, 1))]
         eval_trajs = generate_multiple_histories(MazeEnv, env_configs, rollin_type)
+        print('Generated eval trajectories.')
 
     elif env_config['env'] == 'tree':
         unique_seeds_path = dataset_storage_dir + '/unique_seeds.pkl'
         n_envs = env_config['n_envs']
         with open(unique_seeds_path, 'rb') as f:
             unique_seeds = pickle.load(f)
-        n_unique_seeds = len(unique_seeds)
+        train_seeds = unique_seeds['train']
+        test_seeds = unique_seeds['test']
+        eval_seeds = unique_seeds['eval']
+        n_unique_seeds = len(train_seeds) + len(test_seeds) + len(eval_seeds)
         n_repeats = n_envs // n_unique_seeds
-        split_idx_1 = int(.8 * n_unique_seeds)
-        split_idx_2 = int(.9 * n_unique_seeds)
-        train_seeds = unique_seeds[:split_idx_1]
-        test_seeds = unique_seeds[split_idx_1:split_idx_2]
-        eval_seeds = unique_seeds[split_idx_2:]
+        print(f"n_repeats: {n_repeats}")
 
         env_configs = [{
             'max_layers': env_config['max_layers'],
@@ -165,6 +177,7 @@ def main(cfg: DictConfig):
             'branching_prob': env_config['branching_prob']
             } for s in np.tile(train_seeds, (n_repeats))]
         train_trajs = generate_multiple_histories(TreeEnv, env_configs, rollin_type)
+        print('Generated train trajectories.')
 
         env_configs = [{
             'max_layers': env_config['max_layers'],
@@ -173,6 +186,7 @@ def main(cfg: DictConfig):
             'branching_prob': env_config['branching_prob']
             } for s in np.tile(test_seeds, (n_repeats))]
         test_trajs = generate_multiple_histories(TreeEnv, env_configs, rollin_type)
+        print('Generated test trajectories.')
 
         env_configs = [{
             'max_layers': env_config['max_layers'],
@@ -181,19 +195,23 @@ def main(cfg: DictConfig):
             'branching_prob': env_config['branching_prob']
             } for s in np.tile(eval_seeds, (n_repeats))]
         eval_trajs = generate_multiple_histories(TreeEnv, env_configs, rollin_type)
+        print('Generated eval trajectories.')
 
     else:
         raise NotImplementedError
+    
 
     train_filepath = os.path.join(dataset_storage_dir, build_dataset_name(0))
-    test_filepath = os.path.join(dataset_storage_dir, build_dataset_name(1))
-    eval_filepath = os.path.join(dataset_storage_dir, build_dataset_name(2))
     with open(train_filepath, 'wb') as file:
         pickle.dump(train_trajs, file)
         print(f"Saved to {train_filepath}.")
+
+    test_filepath = os.path.join(dataset_storage_dir, build_dataset_name(1))
     with open(test_filepath, 'wb') as file:
         pickle.dump(test_trajs, file)
         print(f"Saved to {test_filepath}.")
+
+    eval_filepath = os.path.join(dataset_storage_dir, build_dataset_name(2))
     with open(eval_filepath, 'wb') as file:
         pickle.dump(eval_trajs, file)
         print(f"Saved to {eval_filepath}.")
