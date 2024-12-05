@@ -403,4 +403,4 @@ class EvalDarkroom:
             plt.bar(baselines_means.keys(), baselines_means.values(), color=colors)
             plt.ylabel('Average Return')
             plt.title(f'Average Return on {n_eval} Trajectories')
-        return baselines
+        return baselines, _obs
