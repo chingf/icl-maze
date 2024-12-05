@@ -55,6 +55,12 @@ class TreeEnv(BaseEnv):
         np.random.seed()
         self.optimal_action_map = None
         self.dist_from_goal = None
+        self.exploration_buffer = {  # Only used when generating exploratory traj.
+            'actions_made_in_curr_state': set(),
+            'previous_state': None,
+            'current_state': None,
+            'last_action': None,
+            }
 
     def _generate_random_tree(self):
         """Generates a random tree structure"""
@@ -171,6 +177,64 @@ class TreeEnv(BaseEnv):
         zeros = np.zeros(self.action_dim)
         zeros[action] = 1
         return zeros
+    
+    def explore_action(self):
+        """Returns a random action"""
+        current_state = self.exploration_buffer['current_state']
+        previous_state = self.exploration_buffer['previous_state']
+        action_probs = np.ones(self.action_dim)
+        action_probs[-1] = 0.5
+
+        # New state has not been seen, so downweight actions that you've
+        # already taken in the current state
+        if len(self.exploration_buffer['actions_made_in_curr_state']) > 0:
+            for action in self.exploration_buffer['actions_made_in_curr_state']:
+                action_probs[action] = 0
+        else: # You just got to a new state
+            # Try to go forward in an alternating manner
+            if self.exploration_buffer['last_action'] == 1:
+                action_probs[0] = 0.
+                #action_probs[2] = 2
+            elif self.exploration_buffer['last_action'] == 2:
+                action_probs[0] = 0.
+                #action_probs[1] = 2
+            elif self.exploration_buffer['last_action'] == 0:
+                current_state_node = self.node_map[current_state]
+                previous_state_node = self.node_map[previous_state]
+                if current_state_node.left == previous_state_node:
+                    action_probs[1] = 0.
+                    #action_probs[2] = 2
+                elif current_state_node.right == previous_state_node:
+                    action_probs[2] = 0.
+                    #action_probs[1] = 2
+
+        action_probs = action_probs / action_probs.sum()
+        action = np.random.choice(np.arange(self.action_dim), p=action_probs)
+        zeros = np.zeros(self.action_dim)
+        zeros[action] = 1
+        return zeros
+    
+    def update_exploration_buffer(self, action, new_state):
+        """Updates the exploration buffer with the given action and next state"""
+
+        if not isinstance(new_state, list):
+            new_state = new_state.tolist()
+        new_state = tuple(new_state)
+        if action is None:
+            self.exploration_buffer['current_state'] = new_state
+            self.exploration_buffer['last_action'] = None
+            self.exploration_buffer['previous_state'] = None
+            self.exploration_buffer['actions_made_in_curr_state'] = set()
+        else:
+            action = np.argmax(action)
+            if self.exploration_buffer['current_state'] == new_state:
+                self.exploration_buffer['actions_made_in_curr_state'].add(action)
+                self.exploration_buffer['last_action'] = action
+            else:
+                self.exploration_buffer['previous_state'] = self.exploration_buffer['current_state']
+                self.exploration_buffer['current_state'] = new_state
+                self.exploration_buffer['last_action'] = action
+                self.exploration_buffer['actions_made_in_curr_state'] = set()
 
     def transit(self, state, action):
         action = np.argmax(action)
