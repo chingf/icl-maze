@@ -53,6 +53,7 @@ def generate_and_eval_multiple_histories(env_class, env_configs, rollin_type):
         'end_nodes_visited': [],
         'new_end_nodes_found': []
     }
+    rewards = []
     for env_config in env_configs:
         env = env_class(**env_config)
         (
@@ -72,7 +73,8 @@ def generate_and_eval_multiple_histories(env_class, env_configs, rollin_type):
         results['seed'].extend([env_config['initialization_seed']]*n_steps)
         results['end_nodes_visited'].extend(end_nodes_visited)
         results['new_end_nodes_found'].extend(new_end_nodes_found)
-    return results
+        rewards.append(np.sum(context_rewards))
+    return results, rewards
 
 def eval_traj_efficiency(env, traj):
     end_nodes_visited = [0]
@@ -99,6 +101,7 @@ def eval_traj_efficiency(env, traj):
 def main(cfg: DictConfig):
     np.random.seed(0)
     random.seed(0)
+    n_seeds = 30    
 
     # Test fully random rollouts
     env_configs = [{
@@ -106,8 +109,8 @@ def main(cfg: DictConfig):
         'initialization_seed': s,
         'horizon': cfg.horizon,
         'branching_prob': cfg.branching_prob,
-        } for s in range(10)]
-    random_results = generate_and_eval_multiple_histories(TreeEnv, env_configs, rollin_type='random')
+        } for s in range(n_seeds)]
+    random_results, random_rewards = generate_and_eval_multiple_histories(TreeEnv, env_configs, rollin_type='random')
     random_results = pd.DataFrame(random_results)
 
     # Test exploration policy rollouts
@@ -116,8 +119,8 @@ def main(cfg: DictConfig):
         'initialization_seed': s,
         'horizon': cfg.horizon,
         'branching_prob': cfg.branching_prob,
-        } for s in range(10)]
-    explore_results = generate_and_eval_multiple_histories(TreeEnv, env_configs, rollin_type='explore')
+        } for s in range(n_seeds)]
+    explore_results, explore_rewards = generate_and_eval_multiple_histories(TreeEnv, env_configs, rollin_type='explore')
     explore_results = pd.DataFrame(explore_results)
 
     fig, ax = plt.subplots(figsize=(4,3))
@@ -133,7 +136,15 @@ def main(cfg: DictConfig):
     ax.set_ylabel('New end nodes found')
     plt.legend()
     plt.tight_layout()
-    plt.savefig('explore_tree.png', dpi=300)
+    plt.savefig('figs/explore_tree.png', dpi=300)
+
+    fig, ax = plt.subplots(figsize=(4,3))
+    ax.hist(random_rewards, label='Random', color='C0', alpha=0.5)
+    ax.hist(explore_rewards, label='Explore', color='C1', alpha=0.5)
+    ax.set_xlabel('Total reward exerienced')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('figs/explore_tree_rewards.png', dpi=300)
 
 if __name__ == "__main__":
     main()
