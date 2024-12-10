@@ -28,7 +28,7 @@ class TransformerAgent(Agent):
         self.zeros = torch.zeros(
             batch_size, self.state_dim ** 2 + self.action_dim + 1).float().to(device)
         self.sample = sample
-        self.temp = 1.0
+        self.temp = 2
         self.batch_size = batch_size
 
     def act(self, state):

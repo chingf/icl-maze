@@ -32,6 +32,11 @@ class EvalTrees(EvalDarkroom):
     def create_vec_env(self, envs):
         return TreeEnvVec(envs)
     
+    def online(self, eval_trajs, model, config):
+        config['initialization_seed'] = [
+            eval_trajs[i_eval]['initialization_seed'] for i_eval in range(len(eval_trajs))]
+        return super().online(eval_trajs, model, config)
+
     def offline(self, eval_trajs, model, config, plot=False):
         """Runs each episode separately with offline context, after calculating tree-specific metrics."""
 

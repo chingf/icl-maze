@@ -78,51 +78,38 @@ def main(cfg: DictConfig):
 
     # Online and offline evaluation.
     if env_config['env'] == 'darkroom':
-        H = cfg.H if cfg.H > 0 else env_config['horizon']
         config = {
             'Heps': 40,
             'horizon': env_config['horizon'],  # Horizon in an episode
-            'H': H,  # Number of episodes to keep in context. TODO: not really used?
+            'H': cfg.H,  # Number of episodes to keep in context. TODO: not really used?
             'n_eval': n_eval,
             'dim': env_config['dim'],
         }
         eval_func = EvalDarkroom()
     elif env_config['env'] == 'maze':
-        H = cfg.H if cfg.H > 0 else env_config['horizon']
         config = {
             'Heps': 40,
             'horizon': env_config['horizon'],  # Horizon in an episode
-            'H': H,  # Number of episodes to keep in context. TODO: not really used?
+            'H': cfg.H,  # Number of episodes to keep in context. TODO: not really used?
             'n_eval': n_eval,
             'layers': env_config['layers'],
         }
         eval_func = EvalMaze()
     elif env_config['env'] == 'tree':
-        H = cfg.H if cfg.H > 0 else env_config['horizon']
         config = {
             'Heps': 40,
             'horizon': env_config['horizon'],  # Horizon in an episode
-            'H': H,  # Number of episodes to keep in context. TODO: not really used?
+            'H': cfg.H,  # Number of episodes to keep in context. TODO: not really used?
             'n_eval': n_eval,
             'max_layers': env_config['max_layers'],
             'branching_prob': env_config['branching_prob'],
         }
         eval_func = EvalTrees()
 
-    #eval_func.online(eval_trajs, model, config)
-    #fig = plt.gcf()
-    #wandb_logger.experiment.log({"online_performance": wandb.Image(fig)}) 
-    #plt.clf()
-
-    #eval_func.online(eval_trajs, model, config, random_buffer=True,)
-    #fig = plt.gcf()
-    #wandb_logger.experiment.log({"online_performance_random_buffer": wandb.Image(fig)}) 
-    #plt.clf()
-
-    #eval_func.long_online(eval_trajs, model, config)
-    #fig = plt.gcf()
-    #wandb_logger.experiment.log({"online_performance_long_context": wandb.Image(fig)}) 
-    #plt.clf()
+    eval_func.online(eval_trajs, model, config)
+    fig = plt.gcf()
+    wandb_logger.experiment.log({"online_performance": wandb.Image(fig)}) 
+    plt.clf()
 
     del config['Heps']
     del config['H']
@@ -196,8 +183,8 @@ def main(cfg: DictConfig):
             plt.clf()
         plt.clf()
 
+    ## How does performance vary with context length?
     results = pd.DataFrame(results)
-
     fig, ax = plt.subplots()
     sns.lineplot(
         data=results, x='context_length', y='return', hue='model',
@@ -206,6 +193,7 @@ def main(cfg: DictConfig):
     wandb_logger.experiment.log({"offline_performance_horizon_comparison": wandb.Image(fig)}) 
     plt.clf()
 
+    # How does performance vary with experienced reward?
     fig, ax = plt.subplots()
     sns.lineplot(
         data=results, x='experienced_reward', y='return',

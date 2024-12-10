@@ -1,0 +1,7 @@
+_target_: src.models.single_layer_transformer.SingleLayerTransformer
+name: single_layer_transformer
+n_embd: 512
+n_layer: 4
+n_head: 4
+dropout: 0
+train_on_last_pred_only: False

@@ -1,14 +1,14 @@
 defaults:
-  - model: transformer
+  - model: single_layer_transformer
   - env: tree
   - optimizer: default  # For finding the relevant trained model
   - _self_
 
 wandb:
-  project: tree_explore
+  project: tree_1layer_transformer
 
 seed: 0
 epoch: best
-H: -1
+H: 1
 n_eval: 30
 storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze
