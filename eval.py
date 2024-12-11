@@ -103,6 +103,7 @@ def main(cfg: DictConfig):
             'n_eval': n_eval,
             'max_layers': env_config['max_layers'],
             'branching_prob': env_config['branching_prob'],
+            'node_encoding': env_config['node_encoding']
         }
         eval_func = EvalTrees()
 

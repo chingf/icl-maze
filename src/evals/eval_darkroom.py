@@ -41,6 +41,7 @@ class EvalDarkroom:
         cum_means = []
 
         for i in range(n_eps_in_context):
+            print(f"Online episode: {i}")
             batch = {
                 'context_states': context_states[:, :i, :, :].reshape(num_envs, -1, vec_env.state_dim),
                 'context_actions': context_actions[:, :i, :].reshape(num_envs, -1, vec_env.action_dim),
@@ -58,7 +59,8 @@ class EvalDarkroom:
             cum_means.append(np.sum(rewards_lnr, axis=-1))
 
 
-        for _ in range(n_eps_in_context, n_eps):
+        for i in range(n_eps_in_context, n_eps):
+            print(f"Online episode: {i}")
             batch = { 
                 'context_states': context_states.reshape(num_envs, -1, vec_env.state_dim),
                 'context_actions': context_actions.reshape(num_envs, -1, vec_env.action_dim),
@@ -99,7 +101,6 @@ class EvalDarkroom:
 
         envs = []
         for i_eval in range(n_eval):
-            print(f"Eval traj: {i_eval}")
             traj = eval_trajs[i_eval]
             env = self.create_env(config, traj['goal'], i_eval)
             envs.append(env)
@@ -140,7 +141,7 @@ class EvalDarkroom:
         trajs = []
 
         for i_eval in range(n_eval):  # Collect eval environment and trajectories
-            print(f"Eval traj: {i_eval}")
+            print(f"Creating offline eval traj: {i_eval}")
 
             traj = eval_trajs[i_eval]
             batch = {
@@ -161,7 +162,7 @@ class EvalDarkroom:
             envs.append(env)
             trajs.append(traj)
 
-        print("Running darkroom offline evaluations in parallel")
+        print("Running offline evaluations")
         vec_env = self.create_vec_env(envs)
         lnr = TransformerAgent(
             model, batch_size=n_eval, sample=True)

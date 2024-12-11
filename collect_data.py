@@ -174,7 +174,8 @@ def main(cfg: DictConfig):
             'max_layers': env_config['max_layers'],
             'initialization_seed': s,
             'horizon': env_config['horizon'],
-            'branching_prob': env_config['branching_prob']
+            'branching_prob': env_config['branching_prob'],
+            'node_encoding': env_config['node_encoding']
             } for s in np.tile(train_seeds, (n_repeats))]
         train_trajs = generate_multiple_histories(TreeEnv, env_configs, rollin_type)
         print('Generated train trajectories.')
@@ -183,7 +184,8 @@ def main(cfg: DictConfig):
             'max_layers': env_config['max_layers'],
             'initialization_seed': s,
             'horizon': env_config['horizon'],
-            'branching_prob': env_config['branching_prob']
+            'branching_prob': env_config['branching_prob'],
+            'node_encoding': env_config['node_encoding']
             } for s in np.tile(test_seeds, (n_repeats))]
         test_trajs = generate_multiple_histories(TreeEnv, env_configs, rollin_type)
         print('Generated test trajectories.')
@@ -192,7 +194,8 @@ def main(cfg: DictConfig):
             'max_layers': env_config['max_layers'],
             'initialization_seed': s,
             'horizon': env_config['horizon'],
-            'branching_prob': env_config['branching_prob']
+            'branching_prob': env_config['branching_prob'],
+            'node_encoding': env_config['node_encoding']
             } for s in np.tile(eval_seeds, (n_repeats))]
         eval_trajs = generate_multiple_histories(TreeEnv, env_configs, rollin_type)
         print('Generated eval trajectories.')

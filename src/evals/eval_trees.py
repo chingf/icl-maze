@@ -26,7 +26,9 @@ class EvalTrees(EvalDarkroom):
             'max_layers': config['max_layers'],
             'initialization_seed': config['initialization_seed'][i_eval],
             'horizon': config['horizon'],
-            'branching_prob': config['branching_prob']}
+            'branching_prob': config['branching_prob'],
+            'node_encoding': config['node_encoding']
+            }
         return TreeEnv(**_config)
 
     def create_vec_env(self, envs):

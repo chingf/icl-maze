@@ -27,7 +27,8 @@ def main(cfg: DictConfig):
                 max_layers=env_config['max_layers'],
                 initialization_seed=seed,
                 horizon=env_config['horizon'],
-                branching_prob=env_config['branching_prob'])
+                branching_prob=env_config['branching_prob'],
+                node_encoding=env_config['node_encoding'])
         except ValueError as e:
             if str(e) == "No leaves found in tree":
                 continue

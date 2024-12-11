@@ -5,12 +5,16 @@ from src.envs.base_env import BaseEnv
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class Node:
-    def __init__(self, layer, pos, parent=None, left=None, right=None):
+    def __init__(
+            self, layer, pos,
+            parent=None, left=None, right=None,
+            encoding_vector=None):
         self.layer = layer
         self.pos = pos
         self.left = left
         self.right = right
         self.parent = parent
+        self.encoding_vector = encoding_vector
 
     def add_child(self, child, is_left=True):
         if is_left:
@@ -20,7 +24,10 @@ class Node:
         child.parent = self
 
     def encoding(self):
-        return (self.layer, self.pos)
+        if self.encoding_vector is None:
+            return (self.layer, self.pos)
+        else:
+            return self.encoding_vector
 
     def __str__(self):
         return f"({self.layer},{self.pos})"
@@ -28,7 +35,7 @@ class Node:
 class TreeEnv(BaseEnv):
     def __init__(
         self, max_layers, branching_prob, horizon,
-        initialization_seed=None
+        initialization_seed=None, node_encoding=None
         ):
         """
         Args:
@@ -41,13 +48,26 @@ class TreeEnv(BaseEnv):
         self.branching_prob = branching_prob
         self.horizon = horizon
         self.initialization_seed = initialization_seed
-        self.state_dim = 2
+        if initialization_seed is not None:
+            np.random.seed(initialization_seed)
+        if node_encoding is None:
+            self.state_dim = 2
+            self.node_encoding_bank = None
+        elif node_encoding == 'random':
+            self.state_dim = 10
+            max_samples_needed = 2 ** self.max_layers - 1
+            self.node_encoding_bank = np.random.randint(
+                2, size=(max_samples_needed*2, self.state_dim)).astype(np.float32)
+            self.node_encoding_bank = np.unique(self.node_encoding_bank, axis=0)
+            self.node_encoding_bank_idx = 0
+            if self.node_encoding_bank.shape[0] < max_samples_needed:
+                raise ValueError("Failed to generate enough unique node encodings")
+        else:
+            raise ValueError(f"Invalid node encoding: {node_encoding}")
         self.action_dim = 4  # (back, left, right, stay)
         self.root = None
         self.node_map = {}
         self.leaves = []
-        if initialization_seed is not None:
-            np.random.seed(initialization_seed)
         self._generate_random_tree()
         if len(self.leaves) == 0:
             raise ValueError("No leaves found in tree")
@@ -61,10 +81,18 @@ class TreeEnv(BaseEnv):
             'current_state': None,
             'last_action': None,
             }
+        
+    def _sample_node_encoding(self):
+        if self.node_encoding_bank is None:
+            return None
+        else:
+            encoding = self.node_encoding_bank[self.node_encoding_bank_idx]
+            self.node_encoding_bank_idx += 1
+            return tuple(encoding.tolist())
 
     def _generate_random_tree(self):
         """Generates a random tree structure"""
-        self.root = root = Node(0, 0)
+        self.root = root = Node(0, 0, encoding_vector=self._sample_node_encoding())
         nodes_to_process = [(root, 1)]
         
         while nodes_to_process:
@@ -79,13 +107,19 @@ class TreeEnv(BaseEnv):
             # Randomly decide to create left/right children
             if np.random.random() < self.branching_prob:
                 left_child = Node(
-                    current_layer, 2 * current_node.pos, parent=current_node)
+                    current_layer,
+                    2 * current_node.pos,
+                    parent=current_node,
+                    encoding_vector=self._sample_node_encoding())
                 current_node.add_child(left_child, is_left=True)
                 nodes_to_process.append((left_child, current_layer + 1))
             
             if np.random.random() < self.branching_prob:
                 right_child = Node(
-                    current_layer, 2 * current_node.pos + 1, parent=current_node)
+                    current_layer,
+                    2 * current_node.pos + 1,
+                    parent=current_node,
+                    encoding_vector=self._sample_node_encoding())
                 current_node.add_child(right_child, is_left=False)
                 nodes_to_process.append((right_child, current_layer + 1))
         return root
@@ -111,10 +145,15 @@ class TreeEnv(BaseEnv):
         if from_origin:
             self.state = np.array([0, 0])
         else:
+            attempts = 0
             while True:
                 state = self.sample_state()
-                if self.dist_from_goal[tuple(state.tolist())] >= self.max_layers:
+                if self.dist_from_goal[tuple(state.tolist())] >= (self.max_layers - 1):
                     break
+                attempts += 1
+                if attempts > 200:
+                    import pdb; pdb.set_trace()
+                    raise ValueError("Failed to sample a valid state")
             self.state = state
         return self.state
 
@@ -254,7 +293,7 @@ class TreeEnv(BaseEnv):
         elif action == 3:  # Stay
             pass
         reward = 1 if np.all(state == self.goal) else 0
-        return [state[0], state[1]], reward
+        return list(state), reward
 
     def step(self, action):
         if self.current_step >= self.horizon:
@@ -276,6 +315,7 @@ class TreeEnvVec(BaseEnv):
         self._num_envs = len(envs)
 
     def reset(self):
+        print(f"Resetting all environments")
         return [env.reset() for env in self._envs]
 
     def step(self, actions):
