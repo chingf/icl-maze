@@ -1,11 +1,11 @@
 defaults:
-  - model: single_layer_transformer
+  - model: transformer
   - env: tree
   - optimizer: default  # For finding the relevant trained model
   - _self_
 
 wandb:
-  project: tree_1layer_transformer
+  project: tree_random_obs
 
 seed: 0
 epoch: best
