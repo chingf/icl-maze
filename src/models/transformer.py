@@ -26,7 +26,6 @@ class Transformer(pl.LightningModule):
         state_dim: int,
         action_dim: int,
         dropout: float,
-        horizon: int,
         train_on_last_pred_only: bool,
         test: bool,
         name: str,
@@ -41,13 +40,12 @@ class Transformer(pl.LightningModule):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.dropout = dropout
-        self.horizon = horizon
         self.train_on_last_pred_only = train_on_last_pred_only
         self.test = test
         self.optimizer_config = optimizer_config = optimizer_config
 
         config = GPT2Config(
-            n_positions=4 * (1 + self.horizon),
+            n_positions=1000,  # Arbitrary, as position embeddings are not used
             n_embd=self.n_embd,
             n_layer=self.n_layer,
             n_head=self.n_head,
@@ -102,10 +100,11 @@ class Transformer(pl.LightningModule):
         true_actions = true_actions.reshape(-1, self.action_dim)
         pred_actions = pred_actions.reshape(-1, self.action_dim)
         # Calculate accuracy by comparing predicted and true actions
+        horizon = pred_actions.shape[0]
         pred_actions_idx = torch.argmax(pred_actions, dim=1) 
         true_actions_idx = torch.argmax(true_actions, dim=1)
         accuracy = (pred_actions_idx == true_actions_idx).float().mean()
-        loss = self.loss_fn(pred_actions, true_actions) / self.horizon
+        loss = self.loss_fn(pred_actions, true_actions) / horizon
         return loss, accuracy
 
   
@@ -170,7 +169,6 @@ class ImageTransformer(Transformer):
         state_dim: int,
         action_dim: int,
         dropout: float,
-        horizon: int,
         test: bool,
         name: str,
         optimizer_config: dict,
@@ -179,7 +177,7 @@ class ImageTransformer(Transformer):
         ):
 
         super().__init__(n_embd, n_layer, n_head, state_dim, action_dim,
-                         dropout, horizon, test, name, optimizer_config)
+                         dropout, test, name, optimizer_config)
         self.im_embd = im_embd
         size = image_size
         size = (size - 3) // 2 + 1

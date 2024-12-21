@@ -1,6 +1,5 @@
 import json
 import os
-
 import torch
 import hydra
 from hydra.utils import instantiate
@@ -32,7 +31,6 @@ def main(cfg: DictConfig):
     optimizer_config = OmegaConf.to_container(cfg.optimizer, resolve=True)
     model_config = OmegaConf.to_container(cfg.model, resolve=True)
     model_config['test'] = False
-    model_config['horizon'] = env_config['horizon']
     model_config['state_dim'] = env_config['state_dim']
     model_config['action_dim'] = env_config['action_dim']
     model_config['optimizer_config'] = optimizer_config
