@@ -1,0 +1,10 @@
+env: tree
+n_envs: 100000
+horizon: 300
+max_layers: 5
+branching_prob: 0.9
+node_encoding: null  #  If null, state_dim = 2. If random, state_dim = 10
+state_dim: 2
+action_dim: 4
+store_gpu: True
+rollin_type: explore

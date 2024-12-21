@@ -1,0 +1,6 @@
+_target_: src.models.rnn.RNN
+name: rnn
+n_embd: 512
+n_layer: 4
+dropout: 0.25
+train_on_last_pred_only: False

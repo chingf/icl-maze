@@ -1,9 +1,0 @@
-env: maze
-n_envs: 100000
-horizon: 400
-tab_states: True
-layers: 6
-state_dim: 8
-action_dim: 4
-store_gpu: True
-rollin_type: uniform

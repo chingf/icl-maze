@@ -1,7 +1,7 @@
 env: tree
 n_envs: 100000
-horizon: 400
-max_layers: 6
+horizon: 800
+max_layers: 7
 branching_prob: 0.9
 node_encoding: random  #  If null, state_dim = 2. If random, state_dim = 10
 state_dim: 10
