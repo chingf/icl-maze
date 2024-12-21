@@ -24,7 +24,6 @@ class TransformerAgent(Agent):
         self.model = model
         self.state_dim = model.state_dim
         self.action_dim = model.action_dim
-        self.horizon = model.horizon
         self.zeros = torch.zeros(
             batch_size, self.state_dim ** 2 + self.action_dim + 1).float().to(device)
         self.sample = sample

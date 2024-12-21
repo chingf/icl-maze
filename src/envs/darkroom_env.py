@@ -116,7 +116,10 @@ class DarkroomEnvVec(BaseEnv):
     def action_dim(self):
         return self._envs[0].action_dim
 
-    def deploy(self, ctrl):
+    def deploy(self, ctrl, update_batch_online=False):
+        if update_batch_online:
+            raise NotImplementedError("Update batch online is not implemented for DarkroomEnvVec")
+
         ob = self.reset()
         obs = []
         acts = []

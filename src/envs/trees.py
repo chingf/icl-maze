@@ -343,13 +343,14 @@ class TreeEnvVec(BaseEnv):
     def action_dim(self):
         return self._envs[0].action_dim
 
-    def deploy(self, ctrl):
+    def deploy(self, ctrl, update_batch_online=False):
         ob = self.reset()
         obs = []
         acts = []
         next_obs = []
         rews = []
         done = False
+        device = ctrl.batch['context_states'].device
 
         while not done:
             act = ctrl.act(ob)
@@ -362,6 +363,22 @@ class TreeEnvVec(BaseEnv):
 
             rews.append(rew)
             next_obs.append(ob)
+
+            if update_batch_online:
+                batch = ctrl.batch
+                new_context_states = torch.tensor(np.array(obs[-1]), device=device, dtype=torch.float32)
+                new_context_actions = torch.tensor(np.array(acts[-1]), device=device, dtype=torch.float32)
+                new_context_next_states = torch.tensor(np.array(next_obs[-1]), device=device, dtype=torch.float32)
+                new_context_rewards = torch.tensor(np.array(rews[-1]).reshape((-1,1)), device=device, dtype=torch.float32)
+                batch['context_states'] = torch.cat((
+                    batch['context_states'], new_context_states[:, None, :]), dim=1)
+                batch['context_actions'] = torch.cat((
+                    batch['context_actions'], new_context_actions[:, None, :]), dim=1)
+                batch['context_next_states'] = torch.cat((
+                    batch['context_next_states'], new_context_next_states[:, None, :]), dim=1)
+                batch['context_rewards'] = torch.cat((
+                    batch['context_rewards'], new_context_rewards[:, None, :]), dim=1)
+                ctrl.set_batch(batch)
 
         obs = np.stack(obs, axis=1)
         acts = np.stack(acts, axis=1)

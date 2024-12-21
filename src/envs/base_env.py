@@ -18,10 +18,13 @@ class BaseEnv(gym.Env):
     def render(self, mode='human'):
         pass
 
-    def deploy_eval(self, ctrl):
-        return self.deploy(ctrl)
+    def deploy_eval(self, ctrl, update_batch_online=False):
+        return self.deploy(ctrl, update_batch_online)
 
-    def deploy(self, ctrl):
+    def deploy(self, ctrl, update_batch_online):
+        if update_batch_online:
+            raise NotImplementedError("Update batch online is not implemented for BaseEnv")
+
         ob = self.reset()
         obs = []
         acts = []
