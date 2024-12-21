@@ -19,6 +19,7 @@ def main(cfg: DictConfig):
     env_name = build_env_name(env_config)
     dataset_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/datasets'
     os.makedirs(dataset_storage_dir, exist_ok=True)
+    goal_total_seeds = 5000
 
     unique_seeds_info = {}
     for seed in range(n_search_seeds):
@@ -46,9 +47,9 @@ def main(cfg: DictConfig):
     random.shuffle(unique_structs)
 
     # Determine how many seeds to allocate to train, test, and eval
-    goal_num_train_seeds = int(5000*0.8)
-    goal_num_test_seeds = int(5000*0.1)
-    goal_num_eval_seeds = int(5000*0.1)
+    goal_num_train_seeds = int(goal_total_seeds*0.8)
+    goal_num_test_seeds = int(goal_total_seeds*0.1)
+    goal_num_eval_seeds = int(goal_total_seeds*0.1)
 
     # Decide how to split up the environments into train/test/eval
     split_idxs = []
