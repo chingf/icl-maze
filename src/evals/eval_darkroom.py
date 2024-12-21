@@ -27,76 +27,77 @@ class EvalDarkroom:
     def create_vec_env(self, envs):
         return DarkroomEnvVec(envs)
 
-    def deploy_online_vec(self, vec_env, controller, n_eps, n_eps_in_context, horizon):
-        num_envs = vec_env.num_envs
-        context_states = torch.zeros(
-            (num_envs, n_eps_in_context, horizon, vec_env.state_dim)).float().to(device)
-        context_actions = torch.zeros(
-            (num_envs, n_eps_in_context, horizon, vec_env.action_dim)).float().to(device)
-        context_next_states = torch.zeros(
-            (num_envs, n_eps_in_context, horizon, vec_env.state_dim)).float().to(device)
-        context_rewards = torch.zeros(
-            (num_envs, n_eps_in_context, horizon, 1)).float().to(device)
-
-        cum_means = []
-
-        for i in range(n_eps_in_context):
-            print(f"Online episode: {i}")
-            batch = {
-                'context_states': context_states[:, :i, :, :].reshape(num_envs, -1, vec_env.state_dim),
-                'context_actions': context_actions[:, :i, :].reshape(num_envs, -1, vec_env.action_dim),
-                'context_next_states': context_next_states[:, :i, :, :].reshape(num_envs, -1, vec_env.state_dim),
-                'context_rewards': context_rewards[:, :i, :, :].reshape(num_envs, -1, 1),
-            }
-            controller.set_batch(batch)
-            states_lnr, actions_lnr, next_states_lnr, rewards_lnr = vec_env.deploy_eval(
-                controller)
-            context_states[:, i, :, :] = convert_to_tensor(states_lnr)
-            context_actions[:, i, :, :] = convert_to_tensor(actions_lnr)
-            context_next_states[:, i, :, :] = convert_to_tensor(next_states_lnr)
-            context_rewards[:, i, :, :] = convert_to_tensor(rewards_lnr[:, :, None])
-
-            cum_means.append(np.sum(rewards_lnr, axis=-1))
-
-
-        for i in range(n_eps_in_context, n_eps):
-            print(f"Online episode: {i}")
-            batch = { 
-                'context_states': context_states.reshape(num_envs, -1, vec_env.state_dim),
-                'context_actions': context_actions.reshape(num_envs, -1, vec_env.action_dim),
-                'context_next_states': context_next_states.reshape(num_envs, -1, vec_env.state_dim),
-                'context_rewards': context_rewards.reshape(num_envs, -1, 1),
-            }
-            controller.set_batch(batch)
-            states_lnr, actions_lnr, next_states_lnr, rewards_lnr = vec_env.deploy_eval(
-                controller)  # Deploy controller in environment for HORIZON steps
-            mean = np.sum(rewards_lnr, axis=-1)
-            cum_means.append(mean)
-
-            # Convert to torch
-            states_lnr = convert_to_tensor(states_lnr)  # (n_envs, horizon, state_dim)
-            actions_lnr = convert_to_tensor(actions_lnr)
-            next_states_lnr = convert_to_tensor(next_states_lnr)
-            rewards_lnr = convert_to_tensor(rewards_lnr[:, :, None])
-
-            # Roll in new data by shifting the batch and appending the new data.
-            context_states = torch.cat(
-                (context_states[:, 1:, :, :], states_lnr[:, None, :, :]), dim=1)
-            context_actions = torch.cat(
-                (context_actions[:, 1:, :, :], actions_lnr[:, None, :, :]), dim=1)
-            context_next_states = torch.cat(
-                (context_next_states[:, 1:, :, :], next_states_lnr[:, None, :, :]), dim=1)
-            context_rewards = torch.cat(
-                (context_rewards[:, 1:, :, :], rewards_lnr[:, None, :, :]), dim=1)
-
-        return np.stack(cum_means, axis=1)
-
     def online(self, eval_trajs, model, config):
+        def _deploy_online_vec(vec_env, controller, n_eps, n_eps_in_context, horizon):
+            num_envs = vec_env.num_envs
+            context_states = torch.zeros(
+                (num_envs, n_eps_in_context, horizon, vec_env.state_dim)).float().to(device)
+            context_actions = torch.zeros(
+                (num_envs, n_eps_in_context, horizon, vec_env.action_dim)).float().to(device)
+            context_next_states = torch.zeros(
+                (num_envs, n_eps_in_context, horizon, vec_env.state_dim)).float().to(device)
+            context_rewards = torch.zeros(
+                (num_envs, n_eps_in_context, horizon, 1)).float().to(device)
+
+            cum_means = []
+
+            # Fill context buffer first
+            for i in range(n_eps_in_context):
+                print(f"Online episode: {i}")
+                batch = {
+                    'context_states': context_states[:, :i, :, :].reshape(num_envs, -1, vec_env.state_dim),
+                    'context_actions': context_actions[:, :i, :].reshape(num_envs, -1, vec_env.action_dim),
+                    'context_next_states': context_next_states[:, :i, :, :].reshape(num_envs, -1, vec_env.state_dim),
+                    'context_rewards': context_rewards[:, :i, :, :].reshape(num_envs, -1, 1),
+                }
+                controller.set_batch(batch)
+                states_lnr, actions_lnr, next_states_lnr, rewards_lnr = vec_env.deploy_eval(
+                    controller)
+                context_states[:, i, :, :] = convert_to_tensor(states_lnr)
+                context_actions[:, i, :, :] = convert_to_tensor(actions_lnr)
+                context_next_states[:, i, :, :] = convert_to_tensor(next_states_lnr)
+                context_rewards[:, i, :, :] = convert_to_tensor(rewards_lnr[:, :, None])
+
+                cum_means.append(np.sum(rewards_lnr, axis=-1))
+
+            # Then roll in new data into context buffer
+            for i in range(n_eps_in_context, n_eps):
+                print(f"Online episode: {i}")
+                batch = { 
+                    'context_states': context_states.reshape(num_envs, -1, vec_env.state_dim),
+                    'context_actions': context_actions.reshape(num_envs, -1, vec_env.action_dim),
+                    'context_next_states': context_next_states.reshape(num_envs, -1, vec_env.state_dim),
+                    'context_rewards': context_rewards.reshape(num_envs, -1, 1),
+                }
+                controller.set_batch(batch)
+                states_lnr, actions_lnr, next_states_lnr, rewards_lnr = vec_env.deploy_eval(
+                    controller)  # Deploy controller in environment for HORIZON steps
+                mean = np.sum(rewards_lnr, axis=-1)
+                cum_means.append(mean)
+
+                # Convert to torch
+                states_lnr = convert_to_tensor(states_lnr)  # (n_envs, horizon, state_dim)
+                actions_lnr = convert_to_tensor(actions_lnr)
+                next_states_lnr = convert_to_tensor(next_states_lnr)
+                rewards_lnr = convert_to_tensor(rewards_lnr[:, :, None])
+
+                # Roll in new data by shifting the batch and appending the new data.
+                context_states = torch.cat(
+                    (context_states[:, 1:, :, :], states_lnr[:, None, :, :]), dim=1)
+                context_actions = torch.cat(
+                    (context_actions[:, 1:, :, :], actions_lnr[:, None, :, :]), dim=1)
+                context_next_states = torch.cat(
+                    (context_next_states[:, 1:, :, :], next_states_lnr[:, None, :, :]), dim=1)
+                context_rewards = torch.cat(
+                    (context_rewards[:, 1:, :, :], rewards_lnr[:, None, :, :]), dim=1)
+
+            return np.stack(cum_means, axis=1)
+
+        # Start of online evaluation logic
         n_eps = config['Heps']
         n_eps_in_context = config['H']
         n_eval = config['n_eval']
         horizon = config['horizon']
-
         all_means_lnr = []
 
         envs = []
@@ -109,7 +110,7 @@ class EvalDarkroom:
             model, batch_size=n_eval, sample=True)
         vec_env = self.create_vec_env(envs)
 
-        cum_means_lnr = self.deploy_online_vec(
+        cum_means_lnr = _deploy_online_vec(
             vec_env, lnr_controller, n_eps, n_eps_in_context, horizon)
 
         all_means_lnr = np.array(cum_means_lnr)
@@ -196,3 +197,50 @@ class EvalDarkroom:
             plt.ylabel('Average Return')
             plt.title(f'Average Return on {n_eval} Trajectories')
         return baselines, _epsgreedy_obs
+
+
+    def continual_online(self, eval_trajs, model, config):
+        def _deploy_continual_online_vec(vec_env, controller):
+            num_envs = vec_env.num_envs
+            batch = {
+                'context_states': torch.zeros((num_envs, 0, vec_env.state_dim)).float().to(device),
+                'context_actions': torch.zeros((num_envs, 0, vec_env.action_dim)).float().to(device),
+                'context_next_states': torch.zeros((num_envs, 0, vec_env.state_dim)).float().to(device),
+                'context_rewards': torch.zeros((num_envs, 0, 1)).float().to(device),
+            }
+            controller.set_batch(batch)
+            states_lnr, actions_lnr, next_states_lnr, rewards_lnr = vec_env.deploy_eval(
+                controller, update_batch_online=True)
+            return rewards_lnr # (n_envs, horizon)
+
+        # Start of online evaluation logic
+        n_eval = config['n_eval']
+        horizon = config['horizon']
+
+        envs = []
+        for i_eval in range(n_eval):
+            traj = eval_trajs[i_eval]
+            env = self.create_env(config, traj['goal'], i_eval)
+            env.horizon = env.horizon*3
+            envs.append(env)
+
+        lnr_controller = TransformerAgent(
+            model, batch_size=n_eval, sample=True)
+        vec_env = self.create_vec_env(envs)
+
+        rewards_lnr = _deploy_continual_online_vec(vec_env, lnr_controller)
+        means_lnr = np.mean(rewards_lnr, axis=0)
+        sems_lnr = scipy.stats.sem(rewards_lnr, axis=0)
+
+        # Plotting
+        for i in range(n_eval):
+            plt.plot(rewards_lnr[i], color='blue', alpha=0.2)
+
+        plt.plot(means_lnr, label='Learner')
+        plt.fill_between(
+            np.arange(rewards_lnr.shape[1]), means_lnr - sems_lnr,
+            means_lnr + sems_lnr, alpha=0.2)
+        plt.legend()
+        plt.xlabel('Steps')
+        plt.ylabel('Average Return')
+        plt.title(f'Continual online Evaluation on {n_eval} Envs')

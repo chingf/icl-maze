@@ -46,3 +46,7 @@ class EvalTrees(EvalDarkroom):
             eval_trajs[i_eval]['initialization_seed'] for i_eval in range(len(eval_trajs))]
         return super().offline(eval_trajs, model, config, plot)
 
+    def continual_online(self, eval_trajs, model, config):
+        config['initialization_seed'] = [
+            eval_trajs[i_eval]['initialization_seed'] for i_eval in range(len(eval_trajs))]
+        return super().continual_online(eval_trajs, model, config)

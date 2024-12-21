@@ -1,6 +1,5 @@
 import os
 import pickle
-
 import matplotlib.pyplot as plt
 import torch
 from IPython import embed
@@ -35,7 +34,6 @@ def main(cfg: DictConfig):
     optimizer_config = OmegaConf.to_container(cfg.optimizer, resolve=True)
     model_config = OmegaConf.to_container(cfg.model, resolve=True)
     model_config['test'] = True  # TODO: won't work for context-length evaluation
-    model_config['horizon'] = env_config['horizon']
     model_config['state_dim'] = env_config['state_dim']
     model_config['action_dim'] = env_config['action_dim']
     model_config['optimizer_config'] = optimizer_config
@@ -106,6 +104,11 @@ def main(cfg: DictConfig):
             'node_encoding': env_config['node_encoding']
         }
         eval_func = EvalTrees()
+
+    eval_func.continual_online(eval_trajs, model, config)
+    fig = plt.gcf()
+    wandb_logger.experiment.log({"continual_online_performance": wandb.Image(fig)}) 
+    plt.clf()
 
     eval_func.online(eval_trajs, model, config)
     fig = plt.gcf()
