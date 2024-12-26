@@ -126,13 +126,14 @@ def main(cfg: DictConfig):
         'experienced_reward': [],
         'context_length': []
     }
-    test_horizons = np.arange(0, horizon + 1, 10)
+    test_horizons = np.arange(0, horizon + 1, horizon//20)
     horizons_to_visualize = [
         test_horizons[test_horizons.size//10],
         test_horizons[test_horizons.size//3],
+        test_horizons[2*(test_horizons.size//3)],
         test_horizons[-1]
         ]
-    for _h in np.arange(0, horizon + 1, 10):
+    for _h in test_horizons:
         # Generate truncated trajectories
         _eval_trajs = []
         for traj in eval_trajs:
@@ -145,7 +146,8 @@ def main(cfg: DictConfig):
             np.sum(_traj['context_rewards']).item() for _traj in _eval_trajs]
 
         # Evaluate offline
-        _returns, _obs = eval_func.offline(_eval_trajs, model, config, plot=True)
+        _returns, _obs, _envs = eval_func.offline(
+            _eval_trajs, model, config, plot=True, return_envs=True)
         for model_name, model_returns in _returns.items():
             model_returns = model_returns.tolist()
             results['model'].extend([model_name] * n_eval)
@@ -154,37 +156,18 @@ def main(cfg: DictConfig):
             results['experienced_reward'].extend(experienced_rewards[:n_eval])
             results['context_length'].extend([_h]*n_eval)
 
+        if _h in horizons_to_visualize and env_config['env'] == 'tree':
+            fig, ax = plt.subplots(figsize=(15, 3))
+            eval_func.plot_trajectory(_obs, _envs, ax)
+            wandb_logger.experiment.log({"sample_paths_context_len_{}".format(_h): wandb.Image(fig)}) 
+            plt.clf()
+
         # Save performance when given full experience buffer
         if _h == horizon:
             fig = plt.gcf()
             wandb_logger.experiment.log(
                 {"offline_performance_horizon_{}".format(_h): wandb.Image(fig)}) 
             
-        if _h in horizons_to_visualize:
-            fig, ax = plt.subplots(figsize=(10, 3))
-            for i in range(3):
-                path = _obs[i].astype(float)
-                base = 2*np.ones(path.shape[0])
-                x_offset = np.power(base, env_config['max_layers'] - 1 - path[:,0])-1
-                x_offset /= 2  # Centers the tree
-                x_offset += i*25  # Spaces out paths from different seeds
-                path[:,1] += x_offset
-                path_jittered = path + np.random.normal(0, 0.1, path.shape)
-                scatter = ax.scatter(
-                    path_jittered[:, 1] + x_offset, 
-                    -path_jittered[:, 0],
-                    c=np.arange(len(path)), 
-                    cmap='viridis',
-                    alpha=0.6
-                )
-                
-            # Add colorbar to show temporal progression
-            plt.colorbar(scatter, label='Timestep')
-            ax.set_xlabel('X Position')
-            ax.set_ylabel('Y Position')
-            ax.set_title(f'Agent Path - Environment {i}')
-            wandb_logger.experiment.log({"sample_paths_context_len_{}".format(_h): wandb.Image(fig)}) 
-            plt.clf()
         plt.clf()
 
     ## How does performance vary with context length?
@@ -192,12 +175,15 @@ def main(cfg: DictConfig):
     fig, ax = plt.subplots()
     sns.lineplot(
         data=results, x='context_length', y='return', hue='model',
-        units='environment', estimator=None, ax=ax, alpha=0.5)
+        units='environment', estimator=None, ax=ax, alpha=0.2)
+    sns.lineplot(
+        data=results, x='context_length', y='return', hue='model',
+        ax=ax)
     plt.legend()
     wandb_logger.experiment.log({"offline_performance_horizon_comparison": wandb.Image(fig)}) 
     plt.clf()
 
-    # How does performance vary with experienced reward?
+    ## How does performance vary with experienced reward?
     fig, ax = plt.subplots()
     sns.lineplot(
         data=results, x='experienced_reward', y='return',

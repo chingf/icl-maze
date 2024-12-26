@@ -90,6 +90,8 @@ def build_model_name(model_config, optimizer_config):
         model_filename += '_dropout' + str(model_config['dropout'])
         model_filename += '_lr' + str(optimizer_config['lr'])
         model_filename += '_batch' + str(optimizer_config['batch_size'])
+        if model_config['separate_context_and_query']:
+            model_filename += '_sep'
     return model_filename
 
 def build_dataset_name(mode):

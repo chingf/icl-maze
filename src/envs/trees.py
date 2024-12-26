@@ -313,6 +313,8 @@ class TreeEnvVec(BaseEnv):
     def __init__(self, envs):
         self._envs = envs
         self._num_envs = len(envs)
+        self.horizon = envs[0].horizon
+        self.online_batch_size = None
 
     def reset(self):
         print(f"Resetting all environments")
@@ -344,6 +346,8 @@ class TreeEnvVec(BaseEnv):
         return self._envs[0].action_dim
 
     def deploy(self, ctrl, update_batch_online=False):
+        if update_batch_online and self.online_batch_size is None:
+            raise ValueError("online_batch_size is not set")
         ob = self.reset()
         obs = []
         acts = []
@@ -351,6 +355,7 @@ class TreeEnvVec(BaseEnv):
         rews = []
         done = False
         device = ctrl.batch['context_states'].device
+        full_trajectory = None
 
         while not done:
             act = ctrl.act(ob)
@@ -365,19 +370,25 @@ class TreeEnvVec(BaseEnv):
             next_obs.append(ob)
 
             if update_batch_online:
-                batch = ctrl.batch
+                if full_trajectory is None:
+                    full_trajectory = ctrl.batch
                 new_context_states = torch.tensor(np.array(obs[-1]), device=device, dtype=torch.float32)
                 new_context_actions = torch.tensor(np.array(acts[-1]), device=device, dtype=torch.float32)
                 new_context_next_states = torch.tensor(np.array(next_obs[-1]), device=device, dtype=torch.float32)
                 new_context_rewards = torch.tensor(np.array(rews[-1]).reshape((-1,1)), device=device, dtype=torch.float32)
-                batch['context_states'] = torch.cat((
-                    batch['context_states'], new_context_states[:, None, :]), dim=1)
-                batch['context_actions'] = torch.cat((
-                    batch['context_actions'], new_context_actions[:, None, :]), dim=1)
-                batch['context_next_states'] = torch.cat((
-                    batch['context_next_states'], new_context_next_states[:, None, :]), dim=1)
-                batch['context_rewards'] = torch.cat((
-                    batch['context_rewards'], new_context_rewards[:, None, :]), dim=1)
+                full_trajectory['context_states'] = torch.cat((
+                    full_trajectory['context_states'], new_context_states[:, None, :]), dim=1)
+                full_trajectory['context_actions'] = torch.cat((
+                    full_trajectory['context_actions'], new_context_actions[:, None, :]), dim=1)
+                full_trajectory['context_next_states'] = torch.cat((
+                    full_trajectory['context_next_states'], new_context_next_states[:, None, :]), dim=1)
+                full_trajectory['context_rewards'] = torch.cat((
+                    full_trajectory['context_rewards'], new_context_rewards[:, None, :]), dim=1)
+                batch = {}
+                for key in [
+                        'context_states', 'context_actions',
+                        'context_next_states', 'context_rewards']:
+                    batch[key] = full_trajectory[key][:, -self.online_batch_size:, :]
                 ctrl.set_batch(batch)
 
         obs = np.stack(obs, axis=1)

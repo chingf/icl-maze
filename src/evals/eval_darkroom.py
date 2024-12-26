@@ -130,7 +130,7 @@ class EvalDarkroom:
         plt.title(f'Online Evaluation on {n_eval} Envs')
 
 
-    def offline(self, eval_trajs, model, config, plot=False):
+    def offline(self, eval_trajs, model, config, plot=False, return_envs=False):
         """ Runs each episode separately with offline context. """
         n_eval = config['n_eval']
         horizon = config['horizon']
@@ -196,11 +196,15 @@ class EvalDarkroom:
             plt.bar(baselines_means.keys(), baselines_means.values(), color=colors)
             plt.ylabel('Average Return')
             plt.title(f'Average Return on {n_eval} Trajectories')
-        return baselines, _epsgreedy_obs
+        
+        if return_envs:
+            return baselines, _epsgreedy_obs, envs
+        else:
+            return baselines, _epsgreedy_obs
 
 
     def continual_online(self, eval_trajs, model, config):
-        def _deploy_continual_online_vec(vec_env, controller):
+        def _deploy_continual_online_vec(vec_env, controller, horizon):
             num_envs = vec_env.num_envs
             batch = {
                 'context_states': torch.zeros((num_envs, 0, vec_env.state_dim)).float().to(device),
@@ -209,6 +213,7 @@ class EvalDarkroom:
                 'context_rewards': torch.zeros((num_envs, 0, 1)).float().to(device),
             }
             controller.set_batch(batch)
+            vec_env.online_batch_size = horizon
             states_lnr, actions_lnr, next_states_lnr, rewards_lnr = vec_env.deploy_eval(
                 controller, update_batch_online=True)
             return rewards_lnr # (n_envs, horizon)
@@ -221,14 +226,14 @@ class EvalDarkroom:
         for i_eval in range(n_eval):
             traj = eval_trajs[i_eval]
             env = self.create_env(config, traj['goal'], i_eval)
-            env.horizon = env.horizon*3
+            env.horizon = horizon*30
             envs.append(env)
 
         lnr_controller = TransformerAgent(
             model, batch_size=n_eval, sample=True)
         vec_env = self.create_vec_env(envs)
 
-        rewards_lnr = _deploy_continual_online_vec(vec_env, lnr_controller)
+        rewards_lnr = _deploy_continual_online_vec(vec_env, lnr_controller, horizon)
         means_lnr = np.mean(rewards_lnr, axis=0)
         sems_lnr = scipy.stats.sem(rewards_lnr, axis=0)
 
@@ -240,6 +245,7 @@ class EvalDarkroom:
         plt.fill_between(
             np.arange(rewards_lnr.shape[1]), means_lnr - sems_lnr,
             means_lnr + sems_lnr, alpha=0.2)
+
         plt.legend()
         plt.xlabel('Steps')
         plt.ylabel('Average Return')
