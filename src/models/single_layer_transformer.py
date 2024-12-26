@@ -22,12 +22,12 @@ class SingleLayerTransformer(Transformer):
     def __init__(
         self,
         n_embd: int,
-        n_layer: int,
+        n_embed_layer: int,
+        n_out_layer: int,
         n_head: int,
         state_dim: int,
         action_dim: int,
         dropout: float,
-        horizon: int,
         train_on_last_pred_only: bool,
         test: bool,
         name: str,
@@ -37,20 +37,19 @@ class SingleLayerTransformer(Transformer):
         super(Transformer, self).__init__()
 
         self.n_embd = n_embd
-        self.n_layer = n_layer
+        self.n_embed_layer = n_embed_layer
         self.n_transformer_layers = 1
-        self.n_mlp_layers = n_layer - 1
+        self.n_out_layer = n_out_layer
         self.n_head = n_head
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.dropout = dropout
-        self.horizon = horizon
         self.train_on_last_pred_only = train_on_last_pred_only
         self.test = test
         self.optimizer_config = optimizer_config = optimizer_config
 
         config = GPT2Config(
-            n_positions=4 * (1 + self.horizon),
+            n_positions=1000,  # Arbitrary, as position embeddings are not used
             n_embd=self.n_embd,
             n_layer=self.n_transformer_layers,
             n_head=self.n_head,
@@ -62,17 +61,28 @@ class SingleLayerTransformer(Transformer):
         self.transformer = GPT2Model(config)
         self.remove_unused_params(self.transformer)
         self.transformer.wpe = ZeroEmbedding()
-        self.embed_transition = nn.Linear(
-            2 * self.state_dim + self.action_dim + 1, self.n_embd)
-        self.pred_actions = self.make_mlp_layers()
-
+        self.embed_transition = self.make_embed_mlp_layers()
+        self.pred_actions = self.make_out_mlp_layers()
         self.loss_fn = nn.CrossEntropyLoss(reduction='sum')
 
-    def make_mlp_layers(self):
+    def make_embed_mlp_layers(self):
+        layers = []
+        in_size = 2 * self.state_dim + self.action_dim + 1
+        for layer in range(self.n_embed_layer):
+            if layer == self.n_embed_layer - 1:
+                out_size = self.n_embd
+            else:
+                out_size = min(in_size*2, self.n_embd)
+            layers.append(nn.Linear(in_size, out_size))
+            layers.append(nn.ReLU())
+            in_size = out_size
+        return nn.Sequential(*layers)
+
+    def make_out_mlp_layers(self):
         layers = []
         in_size = self.n_embd
-        for layer in range(self.n_mlp_layers):
-            if layer == self.n_mlp_layers - 1:
+        for layer in range(self.n_out_layer):
+            if layer == self.n_out_layer - 1:
                 out_size = self.action_dim
             else:
                 out_size = max(in_size//2, 32)
@@ -122,10 +132,11 @@ class SingleLayerTransformer(Transformer):
         true_actions = true_actions.reshape(-1, self.action_dim)
         pred_actions = pred_actions.reshape(-1, self.action_dim)
         # Calculate accuracy by comparing predicted and true actions
+        horizon = pred_actions.shape[0]
         pred_actions_idx = torch.argmax(pred_actions, dim=1) 
         true_actions_idx = torch.argmax(true_actions, dim=1)
         accuracy = (pred_actions_idx == true_actions_idx).float().mean()
-        loss = self.loss_fn(pred_actions, true_actions) / self.horizon
+        loss = self.loss_fn(pred_actions, true_actions) / horizon
         return loss, accuracy
 
   
