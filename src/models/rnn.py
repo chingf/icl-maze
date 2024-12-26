@@ -21,6 +21,7 @@ class RNN(pl.LightningModule):
         train_on_last_pred_only: bool,
         test: bool,
         name: str,
+        separate_context_and_query: bool,
         optimizer_config: dict,
         ):
 
@@ -33,6 +34,7 @@ class RNN(pl.LightningModule):
         self.dropout = dropout
         self.train_on_last_pred_only = train_on_last_pred_only
         self.test = test
+        self.separate_context_and_query = separate_context_and_query
         self.optimizer_config = optimizer_config = optimizer_config
 
         print(f"LSTM Dropout: {self.dropout}")
@@ -45,25 +47,45 @@ class RNN(pl.LightningModule):
             )
         self.embed_transition = nn.Linear(
             2 * self.state_dim + self.action_dim + 1, self.n_embd)
-        self.pred_actions = nn.Linear(self.n_embd, self.action_dim)
         self.loss_fn = nn.CrossEntropyLoss(reduction='sum')
+        if self.separate_context_and_query:
+            self.pred_actions = nn.Sequential(
+                nn.Linear(2*self.n_embd, self.n_embd),
+                nn.ReLU(),
+                nn.Linear(self.n_embd, self.action_dim)
+                )
+        else:
+            self.pred_actions = nn.Linear(self.n_embd, self.action_dim)
 
     def forward(self, x):
         query_states = x['query_states'][:, None, :]
         zeros = x['zeros'][:, None, :]
 
-        state_seq = torch.cat([query_states, x['context_states']], dim=1)
-        action_seq = torch.cat(
-            [zeros[:, :, :self.action_dim], x['context_actions']], dim=1)
-        next_state_seq = torch.cat(
-            [zeros[:, :, :self.state_dim], x['context_next_states']], dim=1)
-        reward_seq = torch.cat([zeros[:, :, :1], x['context_rewards']], dim=1)
+        if self.separate_context_and_query:
+            state_seq = x['context_states']
+            action_seq = x['context_actions']
+            next_state_seq = x['context_next_states']
+            reward_seq = x['context_rewards']
+        else:
+            state_seq = torch.cat([query_states, x['context_states']], dim=1)
+            action_seq = torch.cat(
+                [zeros[:, :, :self.action_dim], x['context_actions']], dim=1)
+            next_state_seq = torch.cat(
+                [zeros[:, :, :self.state_dim], x['context_next_states']], dim=1)
+            reward_seq = torch.cat([zeros[:, :, :1], x['context_rewards']], dim=1)
 
         seq = torch.cat(
             [state_seq, action_seq, next_state_seq, reward_seq], dim=2)
         stacked_inputs = self.embed_transition(seq)
         rnn_outputs, _ = self.rnn(stacked_inputs)  # (batch, seq_len, hidden_size)
-        preds = self.pred_actions(rnn_outputs)
+        if self.separate_context_and_query:
+            query = torch.cat([query_states, zeros[:,:,:self.action_dim+self.state_dim+1]], dim=2)
+            query = self.embed_transition(query)
+            query = query.repeat(1, rnn_outputs.shape[1], 1)
+            rnn_outputs_and_query = torch.cat([rnn_outputs, query], dim=2)
+            preds = self.pred_actions(rnn_outputs_and_query)
+        else:
+            preds = self.pred_actions(rnn_outputs)
 
         if self.test:
             return preds[:, -1, :]

@@ -5,4 +5,5 @@ defaults:
 wandb:
   project: 7layer
 
-storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze
+storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
+#storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze

@@ -8,4 +8,5 @@ wandb:
   project: 7layer
 
 seed: 0
-storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze
+storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
+#storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze
