@@ -58,7 +58,9 @@ class EvalTrees(EvalDarkroom):
             path = []  # Collect path taken by agent
             for observation in obs[i]:
                 env = envs[i]
-                node = env.node_map[tuple(observation.tolist())]
+                if not isinstance(observation, list):
+                    observation = observation.tolist()
+                node = env.node_map[tuple(observation)]
                 path.append([node.layer, node.pos])
             path = np.array(path).astype(float)
             base = 2*np.ones(path.shape[0])

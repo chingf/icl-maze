@@ -78,11 +78,12 @@ def build_env_name(env_config):
 
 def build_model_name(model_config, optimizer_config):
     model_filename = model_config['name']
-    if model_filename == 'transformer':
+    if model_filename.startswith('transformer'):
         model_filename += '_embd' + str(model_config['n_embd'])
         model_filename += '_layer' + str(model_config['n_layer'])
         model_filename += '_head' + str(model_config['n_head'])
         model_filename += '_lr' + str(optimizer_config['lr'])
+        model_filename += '_drop' + str(model_config['dropout'])
         model_filename += '_batch' + str(optimizer_config['batch_size'])
     elif model_filename == 'rnn':
         model_filename += '_embd' + str(model_config['n_embd'])
