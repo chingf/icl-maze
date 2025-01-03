@@ -4,7 +4,7 @@
 #SBATCH --account=kempner_krajan_lab
 #SBATCH -c 32               # Number of cores (-c)
 #SBATCH --mem=256G           # Memory pool for all cores (see also --mem-per-cpu)
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:4
 #SBATCH --mail-user=ching_fang@hms.harvard.edu
 
 source activate base
@@ -15,7 +15,7 @@ which python
 python --version
 echo $CONDA_DEFAULT_ENV
 
-#python make_tree_seeds.py env.horizon=500
-#python collect_data.py env.horizon=500
-python train.py env.horizon=500
+python make_tree_seeds.py env.goal_total_seeds=100000 env.n_search_seeds=300000
+python collect_data.py env.horizon=500
+python train.py model.n_embd=1024 model.dropout=0.25 optimizer.batch_size=64 model.n_head=8 model.n_layer=8
 

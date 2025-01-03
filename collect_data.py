@@ -158,7 +158,7 @@ def main(cfg: DictConfig):
         eval_trajs = generate_multiple_histories(MazeEnv, env_configs, rollin_type)
         print('Generated eval trajectories.')
 
-    elif env_config['env'] == 'tree':
+    elif env_config['env'].startswith('tree'):
         unique_seeds_path = dataset_storage_dir + '/unique_seeds.pkl'
         n_envs = env_config['n_envs']
         with open(unique_seeds_path, 'rb') as f:
@@ -167,7 +167,7 @@ def main(cfg: DictConfig):
         test_seeds = unique_seeds['test']
         eval_seeds = unique_seeds['eval']
         n_unique_seeds = len(train_seeds) + len(test_seeds) + len(eval_seeds)
-        n_repeats = n_envs // n_unique_seeds
+        n_repeats = max(n_envs // n_unique_seeds, 1)
         print(f"n_repeats: {n_repeats}")
 
         env_configs = [{

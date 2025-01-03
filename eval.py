@@ -105,15 +105,15 @@ def main(cfg: DictConfig):
         }
         eval_func = EvalTrees()
 
-    eval_func.continual_online(eval_trajs, model, config)
-    fig = plt.gcf()
-    wandb_logger.experiment.log({"continual_online_performance": wandb.Image(fig)}) 
-    plt.clf()
-
-    eval_func.online(eval_trajs, model, config)
-    fig = plt.gcf()
-    wandb_logger.experiment.log({"online_performance": wandb.Image(fig)}) 
-    plt.clf()
+#    eval_func.continual_online(eval_trajs, model, config)
+#    fig = plt.gcf()
+#    wandb_logger.experiment.log({"continual_online_performance": wandb.Image(fig)}) 
+#    plt.clf()
+#
+#    eval_func.online(eval_trajs, model, config)
+#    fig = plt.gcf()
+#    wandb_logger.experiment.log({"online_performance": wandb.Image(fig)}) 
+#    plt.clf()
 
     del config['Heps']
     del config['H']
@@ -126,7 +126,7 @@ def main(cfg: DictConfig):
         'experienced_reward': [],
         'context_length': []
     }
-    test_horizons = np.arange(0, horizon + 1, horizon//20)
+    test_horizons = np.linspace(0, horizon, 50, dtype=int)
     horizons_to_visualize = [
         test_horizons[test_horizons.size//10],
         test_horizons[test_horizons.size//3],
@@ -156,19 +156,18 @@ def main(cfg: DictConfig):
             results['experienced_reward'].extend(experienced_rewards[:n_eval])
             results['context_length'].extend([_h]*n_eval)
 
-        if _h in horizons_to_visualize and env_config['env'] == 'tree':
-            fig, ax = plt.subplots(figsize=(15, 3))
-            eval_func.plot_trajectory(_obs, _envs, ax)
-            wandb_logger.experiment.log({"sample_paths_context_len_{}".format(_h): wandb.Image(fig)}) 
-            plt.clf()
-
         # Save performance when given full experience buffer
         if _h == horizon:
             fig = plt.gcf()
             wandb_logger.experiment.log(
                 {"offline_performance_horizon_{}".format(_h): wandb.Image(fig)}) 
-            
-        plt.clf()
+            plt.clf()
+
+        if _h in horizons_to_visualize and env_config['env'] == 'tree':
+            fig, ax = plt.subplots(figsize=(15, 3))
+            eval_func.plot_trajectory(_obs, _envs, ax)
+            wandb_logger.experiment.log({"sample_paths_context_len_{}".format(_h): wandb.Image(fig)}) 
+            plt.clf()
 
     ## How does performance vary with context length?
     results = pd.DataFrame(results)
