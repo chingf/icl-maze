@@ -62,6 +62,10 @@ class TreeEnv(BaseEnv):
             self.node_encoding_bank_idx = 0
             if self.node_encoding_bank.shape[0] < max_samples_needed:
                 raise ValueError("Failed to generate enough unique node encodings")
+        elif node_encoding == 'onehot':
+            self.state_dim = 2 ** self.max_layers - 1
+            self.node_encoding_bank = np.eye(self.state_dim)
+            self.node_encoding_bank_idx = 0
         else:
             raise ValueError(f"Invalid node encoding: {node_encoding}")
         self.action_dim = 4  # (back, left, right, stay)
