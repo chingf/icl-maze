@@ -1,5 +1,5 @@
 defaults:
-  - model: transformer
+  - model: transformer_end_query
   - env: tree
   - optimizer: default
   - _self_

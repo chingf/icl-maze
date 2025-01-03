@@ -8,3 +8,7 @@ state_dim: 10
 action_dim: 4
 store_gpu: True
 rollin_type: explore
+
+# For data creation and collection purposes
+goal_total_seeds: 5000  # 100000
+n_search_seeds: 10000  # 300000
