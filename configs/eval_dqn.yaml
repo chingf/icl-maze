@@ -7,7 +7,8 @@ defaults:
 wandb:
   project: dqn
 
-seed: 0
-n_eval: 1
+n_eval_envs: 30 
+n_eval_episodes: 50 # (per environment)
+test_horizon: 800  # (horizon for each evaluation episode)
 storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
 #storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze

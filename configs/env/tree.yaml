@@ -1,5 +1,5 @@
 env: tree
-n_envs: 100000
+n_envs: 100000  # 100000
 horizon: 800
 max_layers: 7
 branching_prob: 0.9

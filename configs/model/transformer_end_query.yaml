@@ -3,5 +3,5 @@ name: transformer_end_query
 n_embd: 512
 n_layer: 4
 n_head: 4
-dropout: 0.5
+dropout: 0.1
 train_on_last_pred_only: False
