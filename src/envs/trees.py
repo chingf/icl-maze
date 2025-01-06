@@ -48,6 +48,7 @@ class TreeEnv(BaseEnv):
         self.branching_prob = branching_prob
         self.horizon = horizon
         self.initialization_seed = initialization_seed
+        self.node_encoding = node_encoding
         if initialization_seed is not None:
             np.random.seed(initialization_seed)
         if node_encoding is None:
@@ -85,6 +86,16 @@ class TreeEnv(BaseEnv):
             'current_state': None,
             'last_action': None,
             }
+        
+    def clone(self):
+        """Creates a new TreeEnv instance with identical parameters."""
+        return TreeEnv(
+            max_layers=self.max_layers,
+            branching_prob=self.branching_prob,
+            horizon=self.horizon,
+            initialization_seed=self.initialization_seed,
+            node_encoding=self.node_encoding
+        )
         
     def _sample_node_encoding(self):
         if self.node_encoding_bank is None:

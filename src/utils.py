@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import os
 import glob
+import random
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -53,7 +54,15 @@ def find_ckpt_file(ckpt_dir, epoch):
         else:
             ckpt_name = 'last.ckpt'  # Use last checkpoint if epoch not specified
     return ckpt_name
-    
+
+def set_all_seeds(seed=None):
+    if seed == None:
+        torch.seed()
+    else:
+        torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+
 ## Filename generation
 
 def build_env_name(env_config):
@@ -93,6 +102,11 @@ def build_model_name(model_config, optimizer_config):
         model_filename += '_batch' + str(optimizer_config['batch_size'])
         if model_config['separate_context_and_query']:
             model_filename += '_sep'
+    elif model_filename == 'dqn':
+        model_filename += '_nlayers' + str(model_config['n_layers'])
+        model_filename += '_gamma' + str(model_config['gamma'])
+        model_filename += '_target' + str(model_config['target_update'])
+        model_filename += '_lr' + str(optimizer_config['lr'])
     return model_filename
 
 def build_dataset_name(mode):

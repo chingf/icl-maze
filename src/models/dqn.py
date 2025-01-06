@@ -72,6 +72,21 @@ class DQN(nn.Module):
         else:
             random_action = random.randrange(self.action_dim)
             return torch.tensor([[random_action]], device=self.device, dtype=torch.int64)
+        
+    def select_action_vec(self, states, greedy=False):
+        state_batch = torch.stack(states)
+        with torch.no_grad():
+            actions = self.q_network(state_batch).argmax(dim=1)
+        if not greedy:
+            random_samples = torch.rand(len(states), device=self.device)
+            _actions = torch.zeros(len(states), dtype=torch.int64, device=self.device)
+            for i, sample in enumerate(random_samples):
+                if sample > self.epsilon:
+                    _actions[i] = actions[i]
+                else:
+                    _actions[i] = random.randrange(self.action_dim)
+            actions = _actions
+        return actions
 
     def store_transition_from_dict(self, traj_dict):
         n_samples, _ = traj_dict['context_states'].shape
@@ -149,6 +164,27 @@ class DQN(nn.Module):
                 state = torch.tensor(next_state, device=self.device, dtype=torch.float32)
             return returns, trajectory
 
+    def deploy_vec(self, envs, horizon):
+            num_envs = len(envs)
+            returns = np.zeros(num_envs)
+            trajectories = [[] for _ in range(num_envs)]
+            states = [torch.tensor(env.reset(), device=self.device, dtype=torch.float32) for env in envs]
+            
+            with torch.no_grad():
+                for t in range(horizon):
+                    actions = self.select_action_vec(states, greedy=True)
+                    for i, env in enumerate(envs):
+                        action_array = np.zeros(self.action_dim)
+                        action_array[actions[i]] = 1
+                        next_state, reward, done, _ = env.step(action_array)
+                        
+                        returns[i] += reward
+                        trajectories[i].append(states[i].cpu().numpy())
+                        states[i] = torch.tensor(next_state, device=self.device, dtype=torch.float32)
+            
+            return returns, trajectories
+
+
     ## Optimization functions below
 
     def make_optimizer(self, optimizer_config: dict):
@@ -173,7 +209,7 @@ class DQN(nn.Module):
         self.shuffle_memory()
         return losses
 
-    def optimization_step(self, batch):  # TODO: double check Q loss
+    def optimization_step(self, batch):
         batch = list(zip(*batch))
 
         state_batch = torch.tensor(
