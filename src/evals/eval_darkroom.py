@@ -94,10 +94,10 @@ class EvalDarkroom:
             return np.stack(cum_means, axis=1)
 
         # Start of online evaluation logic
-        n_eps = config['Heps']
-        n_eps_in_context = config['H']
-        n_eval = config['n_eval']
-        horizon = config['horizon']
+        n_eps = config['online_eval_episodes']
+        n_eps_in_context = config['online_eps_in_context']
+        n_eval = config['n_eval_envs']
+        horizon = config['test_horizon']
         all_means_lnr = []
 
         envs = []
@@ -130,73 +130,57 @@ class EvalDarkroom:
         plt.title(f'Online Evaluation on {n_eval} Envs')
 
 
-    def offline(self, eval_trajs, model, config, plot=False, return_envs=False):
+    def offline(self, eval_trajs, model, config, return_envs=False):
         """ Runs each episode separately with offline context. """
-        n_eval = config['n_eval']
-        horizon = config['horizon']
-        all_rs_opt = []
-        all_rs_lnr = []
-        all_rs_lnr_greedy = []
+        n_eval_envs = config['n_eval_envs']
+        n_eval_episodes = config['offline_eval_episodes']
 
+        # Create environments and trajectories
         envs = []
         trajs = []
-
-        for i_eval in range(n_eval):  # Collect eval environment and trajectories
-            print(f"Creating offline eval traj: {i_eval}")
-
-            traj = eval_trajs[i_eval]
-            batch = {
-                'context_states': convert_to_tensor(traj['context_states'][None, :, :]),
-                'context_actions': convert_to_tensor(traj['context_actions'][None, :, :]),
-                'context_next_states': convert_to_tensor(traj['context_next_states'][None, :, :]),
-                'context_rewards': convert_to_tensor(traj['context_rewards'][None, :, None]),
-            }
-
-            env = self.create_env(config, traj['goal'], i_eval)
-
-            true_opt = OptPolicy(env)
-            true_opt.set_batch(batch)
-
-            _, _, _, rs_opt = env.deploy_eval(true_opt)
-            all_rs_opt.append(np.sum(rs_opt))
-
+        for ep_i in range(n_eval_envs):
+            env = self.create_env(config, eval_trajs[ep_i]['goal'], ep_i)
             envs.append(env)
-            trajs.append(traj)
-
-        print("Running offline evaluations")
-        vec_env = self.create_vec_env(envs)
-        lnr = TransformerAgent(
-            model, batch_size=n_eval, sample=True)
-        lnr_greedy = TransformerAgent(
-            model, batch_size=n_eval, sample=False)
-
+            trajs.append(eval_trajs[ep_i])
         batch = {
             'context_states': convert_to_tensor([traj['context_states'] for traj in trajs]),
             'context_actions': convert_to_tensor([traj['context_actions'] for traj in trajs]),
             'context_next_states': convert_to_tensor([traj['context_next_states'] for traj in trajs]),
             'context_rewards': convert_to_tensor([traj['context_rewards'][:, None] for traj in trajs]),
-        }
-        lnr.set_batch(batch)
-        lnr_greedy.set_batch(batch)
+            }
 
-        _epsgreedy_obs, _, _, rs_lnr = vec_env.deploy_eval(lnr)
-        _greedy_obs, _acts, _next_obs, rs_lnr_greedy = vec_env.deploy_eval(lnr_greedy)
-        all_rs_lnr = np.sum(rs_lnr, axis=-1)
-        all_rs_lnr_greedy = np.sum(rs_lnr_greedy, axis=-1)
+        # Load agents
+        print("Running offline evaluations")
+        vec_env = self.create_vec_env(envs)
+        epsgreedy_agent = TransformerAgent(model, batch_size=n_eval_envs, sample=True)
+        greedy_agent = TransformerAgent(model, batch_size=n_eval_envs, sample=False)
+        epsgreedy_agent.set_batch(batch)
+        greedy_agent.set_batch(batch)
 
+        # Deploy agents offline
+        greedy_returns = []
+        epsgreedy_returns = []
+        opt_returns = []
+        for _ in range(n_eval_episodes):
+            _epsgreedy_obs, _, _, _epsgreedy_returns, _opt_returns_epsgreedy = \
+                vec_env.deploy_eval(epsgreedy_agent, return_max_rewards=True)
+            _greedy_obs, _, _, _greedy_returns, _opt_returns_greedy = \
+                vec_env.deploy_eval(greedy_agent, return_max_rewards=True)
+            epsgreedy_returns.append(np.sum(_epsgreedy_returns, axis=-1))
+            greedy_returns.append(np.sum(_greedy_returns, axis=-1))
+            opt_returns.append(_opt_returns_epsgreedy)
+        epsgreedy_returns = np.mean(epsgreedy_returns, axis=0)
+        greedy_returns = np.mean(greedy_returns, axis=0)
+        opt_returns = np.mean(opt_returns, axis=0)
+
+
+        # Plot and return
         baselines = {
-            'Opt': np.array(all_rs_opt),
-            'Learner': np.array(all_rs_lnr),
-            'Learner (greedy)': np.array(all_rs_lnr_greedy)
+            'Opt': opt_returns,
+            'Learner': epsgreedy_returns,
+            'Learner (greedy)': greedy_returns
         }
-        baselines_means = {k: np.mean(v) for k, v in baselines.items()}
 
-        if plot:
-            colors = plt.cm.viridis(np.linspace(0, 1, len(baselines_means)))
-            plt.bar(baselines_means.keys(), baselines_means.values(), color=colors)
-            plt.ylabel('Average Return')
-            plt.title(f'Average Return on {n_eval} Trajectories')
-        
         if return_envs:
             return baselines, _epsgreedy_obs, envs
         else:
@@ -219,18 +203,18 @@ class EvalDarkroom:
             return rewards_lnr # (n_envs, horizon)
 
         # Start of online evaluation logic
-        n_eval = config['n_eval']
-        horizon = config['horizon']
+        n_eval_envs = config['n_eval_envs']
+        horizon = config['test_horizon']
 
         envs = []
-        for i_eval in range(n_eval):
-            traj = eval_trajs[i_eval]
-            env = self.create_env(config, traj['goal'], i_eval)
+        for ep_i in range(n_eval_envs):
+            traj = eval_trajs[ep_i]
+            env = self.create_env(config, traj['goal'], ep_i)
             env.horizon = horizon*30
             envs.append(env)
 
         lnr_controller = TransformerAgent(
-            model, batch_size=n_eval, sample=True)
+            model, batch_size=n_eval_envs, sample=True)
         vec_env = self.create_vec_env(envs)
 
         rewards_lnr = _deploy_continual_online_vec(vec_env, lnr_controller, horizon)
@@ -238,8 +222,8 @@ class EvalDarkroom:
         sems_lnr = scipy.stats.sem(rewards_lnr, axis=0)
 
         # Plotting
-        for i in range(n_eval):
-            plt.plot(rewards_lnr[i], color='blue', alpha=0.2)
+        for ep_i in range(n_eval_envs):
+            plt.plot(rewards_lnr[ep_i], color='blue', alpha=0.2)
 
         plt.plot(means_lnr, label='Learner')
         plt.fill_between(
@@ -249,4 +233,4 @@ class EvalDarkroom:
         plt.legend()
         plt.xlabel('Steps')
         plt.ylabel('Average Return')
-        plt.title(f'Continual online Evaluation on {n_eval} Envs')
+        plt.title(f'Continual online Evaluation on {n_eval_envs} Envs')

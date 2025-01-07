@@ -38,6 +38,7 @@ def main(cfg: DictConfig):
     model_config['action_dim'] = env_config['action_dim']
     model_config['optimizer_config'] = optimizer_config
     wandb_project = cfg.wandb.project
+    max_context_length = env_config['horizon']
 
     # Directory path handling
     env_name = build_env_name(env_config)
@@ -66,39 +67,48 @@ def main(cfg: DictConfig):
     ckpt_name = find_ckpt_file(model_storage_dir, cfg.epoch)
     print(f'Loading checkpoint {ckpt_name}')
     checkpoint = torch.load(os.path.join(model_storage_dir, ckpt_name))
+    # Below used for debugging
+    #mpath = "/n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/"
+    #mpath += "7layer/tree_layers7_bprob0.9_envs300000_H800_explore/models/" 
+    #mpath += "transformer_end_query_embd512_layer4_head4_lr0.0001_drop0.1_batch256/copied_best.ckpt"
+    #checkpoint = torch.load(mpath)
     model.load_state_dict(checkpoint['state_dict'])
     model.eval()
 
     # Load trajectories
     with open(eval_dset_path, 'rb') as f:
         eval_trajs = pickle.load(f)
-    n_eval = min(cfg.n_eval, len(eval_trajs))
+    n_eval_envs = min(cfg.n_eval_envs, len(eval_trajs))
+    eval_trajs = eval_trajs[:n_eval_envs]
 
     # Online and offline evaluation.
     if env_config['env'] == 'darkroom':
         config = {
-            'Heps': 40,
-            'horizon': env_config['horizon'],  # Horizon in an episode
-            'H': cfg.H,  # Number of episodes to keep in context. TODO: not really used?
-            'n_eval': n_eval,
+            'online_eval_episodes': cfg.online_eval_episodes,
+            'online_eps_in_context': cfg.online_eps_in_context,
+            'offline_eval_episodes': cfg.offline_eval_episodes,
+            'horizon': cfg.test_horizon,
+            'n_eval_envs': n_eval_envs,
             'dim': env_config['dim'],
         }
         eval_func = EvalDarkroom()
     elif env_config['env'] == 'maze':
         config = {
-            'Heps': 40,
-            'horizon': env_config['horizon'],  # Horizon in an episode
-            'H': cfg.H,  # Number of episodes to keep in context. TODO: not really used?
-            'n_eval': n_eval,
+            'online_eval_episodes': cfg.online_eval_episodes,
+            'online_eps_in_context': cfg.online_eps_in_context,
+            'offline_eval_episodes': cfg.offline_eval_episodes,
+            'horizon': cfg.test_horizon,
+            'n_eval_envs': n_eval_envs,
             'layers': env_config['layers'],
         }
         eval_func = EvalMaze()
     elif env_config['env'] == 'tree':
         config = {
-            'Heps': 40,
-            'horizon': env_config['horizon'],  # Horizon in an episode
-            'H': cfg.H,  # Number of episodes to keep in context. TODO: not really used?
-            'n_eval': n_eval,
+            'online_eval_episodes': cfg.online_eval_episodes,
+            'online_eps_in_context': cfg.online_eps_in_context,
+            'offline_eval_episodes': cfg.offline_eval_episodes,
+            'horizon': cfg.test_horizon,
+            'n_eval_envs': n_eval_envs,
             'max_layers': env_config['max_layers'],
             'branching_prob': env_config['branching_prob'],
             'node_encoding': env_config['node_encoding']
@@ -115,10 +125,7 @@ def main(cfg: DictConfig):
 #    wandb_logger.experiment.log({"online_performance": wandb.Image(fig)}) 
 #    plt.clf()
 
-    del config['Heps']
-    del config['H']
-    config['n_eval'] = n_eval
-    horizon = config['horizon']
+    # Offline evaluations
     results = {
         'model': [],
         'return': [],
@@ -126,51 +133,54 @@ def main(cfg: DictConfig):
         'experienced_reward': [],
         'context_length': []
     }
-    test_horizons = np.linspace(0, horizon, 50, dtype=int)
-    horizons_to_visualize = [
-        test_horizons[test_horizons.size//10],
-        test_horizons[test_horizons.size//3],
-        test_horizons[2*(test_horizons.size//3)],
-        test_horizons[-1]
+    context_lengths = np.linspace(0, max_context_length, 20, dtype=int)
+    context_lengths_to_visualize = [
+        context_lengths[context_lengths.size//10],
+        context_lengths[context_lengths.size//3],
+        context_lengths[2*(context_lengths.size//3)],
+        context_lengths[-1]
         ]
-    for _h in test_horizons:
-        # Generate truncated trajectories
+    for _context_length in [800]: #context_lengths:
         _eval_trajs = []
-        for traj in eval_trajs:
+        for traj in eval_trajs:  # Generate truncated trajectories
             _traj = {}
             for k in traj.keys():
-                val = traj[k][:_h] if 'context' in k else traj[k]
+                val = traj[k][:_context_length] if 'context' in k else traj[k]
                 _traj[k] = val
             _eval_trajs.append(_traj)
         experienced_rewards = [
             np.sum(_traj['context_rewards']).item() for _traj in _eval_trajs]
 
-        # Evaluate offline
-        _returns, _obs, _envs = eval_func.offline(
-            _eval_trajs, model, config, plot=True, return_envs=True)
+        _returns, _obs, _envs = eval_func.offline(  # Run offline
+            _eval_trajs, model, config, return_envs=True)
         for model_name, model_returns in _returns.items():
             model_returns = model_returns.tolist()
-            results['model'].extend([model_name] * n_eval)
+            results['model'].extend([model_name] * n_eval_envs)
             results['return'].extend(model_returns)
-            results['environment'].extend([i for i in range(n_eval)])
-            results['experienced_reward'].extend(experienced_rewards[:n_eval])
-            results['context_length'].extend([_h]*n_eval)
+            results['environment'].extend([i for i in range(n_eval_envs)])
+            results['experienced_reward'].extend(experienced_rewards[:n_eval_envs])
+            results['context_length'].extend([_context_length]*n_eval_envs)
 
-        # Save performance when given full experience buffer
-        if _h == horizon:
-            fig = plt.gcf()
-            wandb_logger.experiment.log(
-                {"offline_performance_horizon_{}".format(_h): wandb.Image(fig)}) 
-            plt.clf()
-
-        if _h in horizons_to_visualize and env_config['env'] == 'tree':
+        if _context_length in context_lengths_to_visualize and env_config['env'] == 'tree':
             fig, ax = plt.subplots(figsize=(15, 3))
             eval_func.plot_trajectory(_obs, _envs, ax)
-            wandb_logger.experiment.log({"sample_paths_context_len_{}".format(_h): wandb.Image(fig)}) 
+            wandb_logger.experiment.log(
+                {"sample_paths_context_len_{}".format(_context_length): wandb.Image(fig)}) 
             plt.clf()
 
-    ## How does performance vary with context length?
+    ## Save performance given the full context length
     results = pd.DataFrame(results)
+    max_ctxt_length_results = results[results['context_length'] == max_context_length]
+    fig, ax = plt.subplots()
+    sns.barplot(data=max_ctxt_length_results, x='model', y='return', ax=ax)
+    plt.xticks(rotation=45)
+    plt.ylabel('Average Return')
+    plt.title(f'Performance with Maximum Context Length ({max_context_length})')
+    wandb_logger.experiment.log(
+        {"offline_performance_context_length_{}".format(max_context_length): wandb.Image(fig)})
+    plt.clf()
+
+    ## How does performance vary with context length?
     fig, ax = plt.subplots()
     sns.lineplot(
         data=results, x='context_length', y='return', hue='model',
@@ -179,7 +189,8 @@ def main(cfg: DictConfig):
         data=results, x='context_length', y='return', hue='model',
         ax=ax)
     plt.legend()
-    wandb_logger.experiment.log({"offline_performance_horizon_comparison": wandb.Image(fig)}) 
+    wandb_logger.experiment.log(
+        {"offline_performance_context_length_comparison": wandb.Image(fig)}) 
     plt.clf()
 
     ## How does performance vary with experienced reward?

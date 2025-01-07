@@ -27,7 +27,8 @@ class EvalTrees(EvalDarkroom):
             'initialization_seed': config['initialization_seed'][i_eval],
             'horizon': config['horizon'],
             'branching_prob': config['branching_prob'],
-            'node_encoding': config['node_encoding']
+            'node_encoding': config['node_encoding'],
+            'goal': goal
             }
         return TreeEnv(**_config)
 
@@ -39,12 +40,14 @@ class EvalTrees(EvalDarkroom):
             eval_trajs[i_eval]['initialization_seed'] for i_eval in range(len(eval_trajs))]
         return super().online(eval_trajs, model, config)
 
-    def offline(self, eval_trajs, model, config, plot=False, return_envs=False):
+    def offline(self, eval_trajs, model, config, return_envs=False):
         """Runs each episode separately with offline context, after calculating tree-specific metrics."""
 
         config['initialization_seed'] = [
             eval_trajs[i_eval]['initialization_seed'] for i_eval in range(len(eval_trajs))]
-        return super().offline(eval_trajs, model, config, plot, return_envs)
+        config['goals'] = [
+            eval_trajs[i_eval]['goal'] for i_eval in range(len(eval_trajs))]
+        return super().offline(eval_trajs, model, config, return_envs)
 
     def continual_online(self, eval_trajs, model, config):
         config['initialization_seed'] = [
