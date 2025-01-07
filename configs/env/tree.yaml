@@ -1,14 +1,14 @@
 env: tree
-n_envs: 100000  # 100000
+n_envs: 300000  # 100000
 horizon: 800
 max_layers: 7
 branching_prob: 0.9
 node_encoding: random  #  If null, state_dim = 2. If random, state_dim = 10
 state_dim: 10
 action_dim: 4
-store_gpu: True
+store_gpu: False
 rollin_type: explore
 
 # For data creation and collection purposes
-goal_total_seeds: 5000  # 100000
-n_search_seeds: 10000  # 300000
+goal_total_seeds: 300000  # 100000
+n_search_seeds: 900000  # 300000
