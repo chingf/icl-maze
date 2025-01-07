@@ -26,6 +26,7 @@ class Transformer(pl.LightningModule):
         test: bool,
         name: str,
         optimizer_config: dict,
+        linear_attention: bool = False,
         ):
 
         super(Transformer, self).__init__()
@@ -39,6 +40,7 @@ class Transformer(pl.LightningModule):
         self.train_on_last_pred_only = train_on_last_pred_only
         self.test = test
         self.optimizer_config = optimizer_config = optimizer_config
+        self.linear_attention = linear_attention
 
         config = GPT2Config(
             n_positions=1000,  # Arbitrary, as position embeddings are not used
@@ -50,7 +52,7 @@ class Transformer(pl.LightningModule):
             attn_pdrop=self.dropout,
             use_cache=False,
         )
-        self.transformer = SimpleGPT2Model(config)
+        self.transformer = SimpleGPT2Model(config, linear_attention)
         self.embed_transition = nn.Linear(
             2 * self.state_dim + self.action_dim + 1, self.n_embd)
         self.pred_actions = nn.Linear(self.n_embd, self.action_dim)
