@@ -35,7 +35,7 @@ class Node:
 class TreeEnv(BaseEnv):
     def __init__(
         self, max_layers, branching_prob, horizon,
-        initialization_seed=None, node_encoding=None
+        initialization_seed=None, node_encoding=None, goal=None
         ):
         """
         Args:
@@ -76,7 +76,13 @@ class TreeEnv(BaseEnv):
         self._generate_random_tree()
         if len(self.leaves) == 0:
             raise ValueError("No leaves found in tree")
-        self.goal = self.sample_goal()
+        if goal is None:
+            self.goal = self.sample_goal()
+        else:
+            if isinstance(goal, np.ndarray) and goal.size == self.state_dim:
+                self.goal = goal
+            else:
+                self.goal = np.array(self._find_encoding_by_position(*goal))
         np.random.seed()
         self.optimal_action_map = None
         self.dist_from_goal = None
@@ -96,7 +102,13 @@ class TreeEnv(BaseEnv):
             initialization_seed=self.initialization_seed,
             node_encoding=self.node_encoding
         )
-        
+    
+    def _find_encoding_by_position(self, layer, pos):
+        for node in self.node_map.values():
+            if node.layer == layer and node.pos == pos:
+                return node.encoding()
+        raise ValueError(f"No node found at layer {layer} and position {pos}")
+    
     def _sample_node_encoding(self):
         if self.node_encoding_bank is None:
             return None
@@ -360,7 +372,11 @@ class TreeEnvVec(BaseEnv):
     def action_dim(self):
         return self._envs[0].action_dim
 
-    def deploy(self, ctrl, update_batch_online=False):
+    def deploy(
+            self, ctrl, update_batch_online=False,
+            return_max_rewards=False
+            ):
+
         if update_batch_online and self.online_batch_size is None:
             raise ValueError("online_batch_size is not set")
         ob = self.reset()
@@ -371,6 +387,12 @@ class TreeEnvVec(BaseEnv):
         done = False
         device = ctrl.batch['context_states'].device
         full_trajectory = None
+
+        if return_max_rewards:
+            max_rewards = []
+            for env in self._envs:
+                dist_from_goal = env.dist_from_goal[tuple(env.state.tolist())]
+                max_rewards.append(self.horizon - dist_from_goal)
 
         while not done:
             act = ctrl.act(ob)
@@ -410,4 +432,8 @@ class TreeEnvVec(BaseEnv):
         acts = np.stack(acts, axis=1)
         next_obs = np.stack(next_obs, axis=1)
         rews = np.stack(rews, axis=1)
-        return obs, acts, next_obs, rews
+
+        if return_max_rewards:
+            return obs, acts, next_obs, rews, max_rewards
+        else:
+            return obs, acts, next_obs, rews

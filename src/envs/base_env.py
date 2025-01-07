@@ -18,8 +18,8 @@ class BaseEnv(gym.Env):
     def render(self, mode='human'):
         pass
 
-    def deploy_eval(self, ctrl, update_batch_online=False):
-        return self.deploy(ctrl, update_batch_online)
+    def deploy_eval(self, ctrl, update_batch_online=False, **kwargs):
+        return self.deploy(ctrl, update_batch_online, **kwargs)
 
     def deploy(self, ctrl, update_batch_online):
         if update_batch_online:
