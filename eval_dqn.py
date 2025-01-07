@@ -1,5 +1,4 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import pickle
 import matplotlib.pyplot as plt
 import torch
@@ -41,7 +40,7 @@ def main(cfg: DictConfig):
     model_name = build_model_name(model_config, optimizer_config)
     dataset_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/datasets'
     model_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/models/{model_name}'
-    eval_dset_path = os.path.join(dataset_storage_dir, build_dataset_name(2))
+    train_dset_path = os.path.join(dataset_storage_dir, build_dataset_name(0))
     max_context_length = env_config['horizon']
     wandb_config = {
         'env': env_config,
@@ -59,12 +58,12 @@ def main(cfg: DictConfig):
     )
 
     # Load trajectories
-    with open(eval_dset_path, 'rb') as f:
-        eval_trajs = pickle.load(f)  # List of dicts
-    n_eval_envs = min(cfg.n_eval_envs, len(eval_trajs))
-    eval_trajs = eval_trajs[:n_eval_envs]
+    with open(train_dset_path, 'rb') as f:  # TODO: switch to training dataset
+        train_trajs = pickle.load(f)  # List of dicts
+    n_eval_envs = min(cfg.n_eval_envs, len(train_trajs))
+    train_trajs = train_trajs[:n_eval_envs]
     env_config['initialization_seed'] = [
-        eval_trajs[i_eval]['initialization_seed'] for i_eval in range(len(eval_trajs))]
+        train_trajs[i_eval]['initialization_seed'] for i_eval in range(len(train_trajs))]
 
     # Fully offline evaluation of context length-dependency 
     results = {
@@ -73,7 +72,8 @@ def main(cfg: DictConfig):
         'experienced_reward': [],
         'context_length': []
     }
-    context_lengths =  np.linspace(100, max_context_length, 20, dtype=int)
+    context_lengths = np.linspace(100, max_context_length, 20, dtype=int)
+    context_lengths = context_lengths[context_lengths < 1200]
     context_lengths_to_visualize = [
         context_lengths[context_lengths.size//10],
         context_lengths[context_lengths.size//3],
@@ -83,7 +83,7 @@ def main(cfg: DictConfig):
     for context_length in context_lengths:
         log_and_visualize = context_length in context_lengths_to_visualize
         _results = eval_offline_by_context_length(
-            model_config, env_config, optimizer_config, eval_trajs,
+            model_config, env_config, optimizer_config, train_trajs,
             context_length, cfg.test_horizon, cfg.n_eval_episodes,
             log_and_visualize)
         results = {k: results[k] + _results[k] for k in results.keys()}
@@ -110,7 +110,7 @@ def main(cfg: DictConfig):
 
 
 def eval_offline_by_context_length(
-    model_config, env_config, optimizer_config, eval_trajs,
+    model_config, env_config, optimizer_config, train_trajs,
     context_length, test_horizon, n_eval_episodes, log_and_visualize):
     print(f'\nEvaluating context length {context_length}')
 
@@ -122,7 +122,7 @@ def eval_offline_by_context_length(
     }
     eval_func = EvalTrees()
     agent_trajectories = [[], []]
-    for i, traj in enumerate(eval_trajs):
+    for i, traj in enumerate(train_trajs):
         print(f'...environment {i}')
         _traj = {}
         for k in traj.keys():
