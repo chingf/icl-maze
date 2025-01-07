@@ -18,11 +18,12 @@ class RNN(pl.LightningModule):
         state_dim: int,
         action_dim: int,
         dropout: float,
-        train_on_last_pred_only: bool,
         test: bool,
         name: str,
-        separate_context_and_query: bool,
         optimizer_config: dict,
+        train_on_last_pred_only: bool,
+        separate_context_and_query: bool,
+        query_at_end: bool,
         ):
 
         super(RNN, self).__init__()
@@ -32,10 +33,16 @@ class RNN(pl.LightningModule):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.dropout = dropout
-        self.train_on_last_pred_only = train_on_last_pred_only
         self.test = test
+        self.train_on_last_pred_only = train_on_last_pred_only
         self.separate_context_and_query = separate_context_and_query
+        self.query_at_end = query_at_end
         self.optimizer_config = optimizer_config = optimizer_config
+
+        if separate_context_and_query and not query_at_end:
+            raise ValueError("query_at_end must be True if separate_context_and_query is True.")
+        if not train_on_last_pred_only and query_at_end and not separate_context_and_query:
+            raise NotImplementedError("Training at multiple steps is not supported if query_at_end is True.")
 
         print(f"LSTM Dropout: {self.dropout}")
         self.rnn = torch.nn.LSTM(
@@ -52,7 +59,9 @@ class RNN(pl.LightningModule):
             self.pred_actions = nn.Sequential(
                 nn.Linear(2*self.n_embd, self.n_embd),
                 nn.ReLU(),
-                nn.Linear(self.n_embd, self.action_dim)
+                nn.Linear(self.n_embd, self.n_embd//2),
+                nn.ReLU(),
+                nn.Linear(self.n_embd//2, self.action_dim),
                 )
         else:
             self.pred_actions = nn.Linear(self.n_embd, self.action_dim)
@@ -66,6 +75,13 @@ class RNN(pl.LightningModule):
             action_seq = x['context_actions']
             next_state_seq = x['context_next_states']
             reward_seq = x['context_rewards']
+        elif self.query_at_end:
+            state_seq = torch.cat([x['context_states'], query_states], dim=1)
+            action_seq = torch.cat(
+                [x['context_actions'], zeros[:, :, :self.action_dim]], dim=1)
+            next_state_seq = torch.cat(
+                [x['context_next_states'], zeros[:, :, :self.state_dim]], dim=1)
+            reward_seq = torch.cat([x['context_rewards'], zeros[:, :, :1]], dim=1)
         else:
             state_seq = torch.cat([query_states, x['context_states']], dim=1)
             action_seq = torch.cat(
