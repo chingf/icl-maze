@@ -87,7 +87,7 @@ def build_env_name(env_config):
 
 def build_model_name(model_config, optimizer_config):
     model_filename = model_config['name']
-    if model_filename.startswith('transformer'):
+    if 'transformer' in model_filename:
         model_filename += '_embd' + str(model_config['n_embd'])
         model_filename += '_layer' + str(model_config['n_layer'])
         model_filename += '_head' + str(model_config['n_head'])
@@ -102,6 +102,8 @@ def build_model_name(model_config, optimizer_config):
         model_filename += '_batch' + str(optimizer_config['batch_size'])
         if model_config['separate_context_and_query']:
             model_filename += '_sep'
+        elif model_config['query_at_end']:
+            model_filename += '_endquery'
     elif model_filename == 'dqn':
         model_filename += '_nlayers' + str(model_config['n_layers'])
         model_filename += '_gamma' + str(model_config['gamma'])
