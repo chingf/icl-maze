@@ -54,9 +54,6 @@ class TabularQLearning:
         td_target = reward + self.gamma * self.q_table[next_state_key][best_next_action] * (1 - done)
         td_error = td_target - self.q_table[state_key][action]
         self.q_table[state_key][action] += self.alpha * td_error
-        if len(self.q_table.keys()) > 15:
-            print('TOO MANY KEYS')
-            import pdb; pdb.set_trace()
         return td_error
     
     def debug_info(self, env):
@@ -72,11 +69,13 @@ class TabularQLearning:
         for key in readable_q_table.keys():
             print(f'{key}: {readable_q_table[key]}')
 
-    def deploy(self, env, horizon):
+    def deploy_vec(self, envs, horizon):
+        return self.deploy(envs[0], horizon)
+
+    def deploy(self, env, horizon, debug=False):
         state = env.reset()
         returns = 0
         trajectory = []
-        debug = False
 
         for t in range(horizon):
             action = self.select_action(state, greedy=True)
