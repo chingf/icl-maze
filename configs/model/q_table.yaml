@@ -1,4 +1,4 @@
 _target_: src.models.q_table.TabularQLearning
 name: q_table
-gamma: 0.7
+gamma: 0.85
 epsilon: 0

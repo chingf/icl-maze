@@ -1,0 +1,4 @@
+lr: 1e-1
+num_epochs: 200
+batch_size: 512
+weight_decay: 0

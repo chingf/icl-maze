@@ -5,7 +5,7 @@ defaults:
   - _self_
 
 wandb:
-  project: full7
+  project: 7layer #full7
 
 seed: 0
 storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze

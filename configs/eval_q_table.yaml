@@ -1,7 +1,7 @@
 defaults:
-  - model: dqn
-  - env: tree_dqn
-  - optimizer: dqn
+  - model: q_table
+  - env: tree_q_table
+  - optimizer: q_table
   - _self_
 
 wandb:

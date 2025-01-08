@@ -1,0 +1,14 @@
+env: tree
+n_envs: 200
+horizon: 2000
+max_layers: 6
+branching_prob: 1.
+node_encoding: onehot  #  If null, state_dim = 2. If random, state_dim = 10. If onehot, state_dim = 2^max_layers - 1
+state_dim: 63
+action_dim: 4
+store_gpu: True
+rollin_type: explore
+
+# For data creation and collection purposes
+goal_total_seeds: 0
+n_search_seeds: 0
