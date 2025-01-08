@@ -41,14 +41,9 @@ def main(cfg: DictConfig):
         env_goal = tuple(env.goal.tolist())
         env_struct = tuple(sorted(env.node_map.keys()))
 
-        if env_config['branching_prob'] == 1.0:
-            search_key = env_goal
-        else:
-            search_key = env_struct
-
         if env_struct not in unique_seeds_info.keys():
-            unique_seeds_info[search_key] = []
-        unique_seeds_info[search_key].append(seed)
+            unique_seeds_info[env_struct] = []
+        unique_seeds_info[env_struct].append(seed)
         seeds_found += 1
 
     # Shuffle the environments found
