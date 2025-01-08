@@ -164,21 +164,20 @@ def linear_attention(query, key, value, attn_mask=None, dropout_p=0.0,
 
     L, S = query.size(-2), key.size(-2)
     scale_factor = 1 / sqrt(query.size(-1)) if scale is None else scale
-    attn_bias = torch.zeros(L, S, dtype=query.dtype)
+    final_attn_mask = torch.zeros(L, S, dtype=query.dtype).to(query.device)
     if is_causal:
         assert attn_mask is None
         temp_mask = torch.ones(L, S, dtype=torch.bool).tril(diagonal=0)
-        attn_bias.masked_fill_(temp_mask.logical_not(), 0.0)
-        attn_bias.to(query.dtype)
+        final_attn_mask.masked_fill_(temp_mask.logical_not(), 0.0)
+        final_attn_mask.to(query.dtype)
 
     if attn_mask is not None:
         if attn_mask.dtype == torch.bool:
-            attn_bias.masked_fill_(attn_mask.logical_not(), 0.0)
+            final_attn_mask.masked_fill_(attn_mask.logical_not(), 0.0)
         else:
             raise ValueError("LinearAttention does not support attn_mask of type other than bool")
 
     attn_weight = query @ key.transpose(-2, -1) * scale_factor
-    attn_weight += attn_bias
-    print('attention')
+    attn_weight *= final_attn_mask
     attn_weight = torch.dropout(attn_weight, dropout_p, train=True)
     return attn_weight @ value
