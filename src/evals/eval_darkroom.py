@@ -153,32 +153,43 @@ class EvalDarkroom:
         print("Running offline evaluations")
         vec_env = self.create_vec_env(envs)
         epsgreedy_agent = TransformerAgent(model, batch_size=n_eval_envs, sample=True)
+        epsgreedy_agent_2 = TransformerAgent(model, batch_size=n_eval_envs, temp=1, sample=True)
         greedy_agent = TransformerAgent(model, batch_size=n_eval_envs, sample=False)
         epsgreedy_agent.set_batch(batch)
+        epsgreedy_agent_2.set_batch(batch)
         greedy_agent.set_batch(batch)
 
         # Deploy agents offline
         greedy_returns = []
         epsgreedy_returns = []
+        epsgreedy_returns_2 = []
         opt_returns = []
         for _ in range(n_eval_episodes):
             _epsgreedy_obs, _, _, _epsgreedy_returns, _opt_returns_epsgreedy = \
                 vec_env.deploy_eval(epsgreedy_agent, return_max_rewards=True)
+            _epsgreedy_obs_2, _, _, _epsgreedy_returns_2, _opt_returns_epsgreedy_2 = \
+                vec_env.deploy_eval(epsgreedy_agent_2, return_max_rewards=True)
             _greedy_obs, _, _, _greedy_returns, _opt_returns_greedy = \
                 vec_env.deploy_eval(greedy_agent, return_max_rewards=True)
             epsgreedy_returns.append(np.sum(_epsgreedy_returns, axis=-1))
+            epsgreedy_returns_2.append(np.sum(_epsgreedy_returns_2, axis=-1))
             greedy_returns.append(np.sum(_greedy_returns, axis=-1))
             opt_returns.append(_opt_returns_epsgreedy)
         epsgreedy_returns = np.mean(epsgreedy_returns, axis=0)
+        epsgreedy_returns_2 = np.mean(epsgreedy_returns_2, axis=0)
         greedy_returns = np.mean(greedy_returns, axis=0)
         opt_returns = np.mean(opt_returns, axis=0)
 
+        print(f"Epsgreedy returns: {epsgreedy_returns}")
+        print(f"Greedy returns: {greedy_returns}")
+        print()
 
         # Plot and return
         baselines = {
             'Opt': opt_returns,
-            'Learner': epsgreedy_returns,
-            'Learner (greedy)': greedy_returns
+            'Learner (temp=2)': epsgreedy_returns,
+            'Learner (temp=1)': epsgreedy_returns_2,
+            'Learner (greedy)': greedy_returns,
         }
 
         if return_envs:
