@@ -1,6 +1,8 @@
 import os
 import pickle
+import h5py
 import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
 import torch
 from IPython import embed
 
@@ -14,8 +16,7 @@ from src.utils import (
     find_ckpt_file,
 )
 import numpy as np
-import scipy
-import time
+import random
 import seaborn as sns
 import pandas as pd
 import hydra
@@ -38,14 +39,19 @@ def main(cfg: DictConfig):
     model_config['action_dim'] = env_config['action_dim']
     model_config['optimizer_config'] = optimizer_config
     wandb_project = cfg.wandb.project
-    max_context_length = env_config['horizon']
 
     # Directory path handling
     env_name = build_env_name(env_config)
     model_name = build_model_name(model_config, optimizer_config)
     dataset_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/datasets'
     model_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/models/{model_name}'
-    eval_dset_path = os.path.join(dataset_storage_dir, build_dataset_name(2))
+    if cfg.override_eval_dataset_path != None:
+        eval_dset_path = cfg.override_eval_dataset_path
+        for param in cfg.override_params:
+            for k, v in param.items():
+                env_config[k] = v
+    else:
+        eval_dset_path = os.path.join(dataset_storage_dir, build_dataset_name(2))
 
     # Resume wandb run from training
     try:
@@ -61,25 +67,35 @@ def main(cfg: DictConfig):
         save_dir=cfg.storage_dir
     )
 
-    # Instantiate model and load checkpoint  # TODO: Seed?
+    # Instantiate model and load checkpoint
     model = instantiate(model_config)
     model = model.to(device)
     ckpt_name = find_ckpt_file(model_storage_dir, cfg.epoch)
     print(f'Loading checkpoint {ckpt_name}')
     checkpoint = torch.load(os.path.join(model_storage_dir, ckpt_name))
-    # Below used for debugging
-    #mpath = "/n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/"
-    #mpath += "7layer/tree_layers7_bprob0.9_envs300000_H800_explore/models/" 
-    #mpath += "transformer_end_query_embd512_layer4_head4_lr0.0001_drop0.1_batch256/copied_best.ckpt"
-    #checkpoint = torch.load(mpath)
     model.load_state_dict(checkpoint['state_dict'])
     model.eval()
 
     # Load trajectories
-    with open(eval_dset_path, 'rb') as f:
-        eval_trajs = pickle.load(f)
-    n_eval_envs = min(cfg.n_eval_envs, len(eval_trajs))
-    eval_trajs = eval_trajs[:n_eval_envs]
+    is_h5_file = eval_dset_path.endswith('.h5')
+    if is_h5_file:
+        eval_trajs = h5py.File(eval_dset_path, 'r')
+        traj_indices = list(eval_trajs.keys())
+        n_eval_envs = min(cfg.n_eval_envs, len(traj_indices))
+        random.seed(0)
+        traj_indices = random.sample(traj_indices, n_eval_envs)
+        random.seed()
+        eval_trajs = [eval_trajs[i] for i in traj_indices]
+    else:  # Pickle file
+        with open(eval_dset_path, 'rb') as f:
+            eval_trajs = pickle.load(f)
+        n_eval_envs = min(cfg.n_eval_envs, len(eval_trajs))
+        random.seed(0)
+        eval_trajs = random.sample(eval_trajs, n_eval_envs)
+        random.seed()
+    max_context_length = eval_trajs[0]['context_rewards'].shape[0]
+    max_context_length = min(max_context_length, 1200)
+    print(f'Max context length: {max_context_length}')
 
     # Online and offline evaluation.
     if env_config['env'] == 'darkroom':
@@ -138,14 +154,21 @@ def main(cfg: DictConfig):
         context_lengths[context_lengths.size//10],
         context_lengths[context_lengths.size//3],
         context_lengths[2*(context_lengths.size//3)],
-        context_lengths[-1]
+        context_lengths[-1],
         ]
-    for _context_length in [800]: #context_lengths:
+    for _context_length in context_lengths:
         _eval_trajs = []
         for traj in eval_trajs:  # Generate truncated trajectories
             _traj = {}
             for k in traj.keys():
-                val = traj[k][:_context_length] if 'context' in k else traj[k]
+                if 'context' in k:
+                    val = traj[k][:_context_length]
+                elif k == 'initialization_seed':
+                    val = np.array(traj[k]).item()
+                elif k == 'goal':
+                    val = np.array(traj[k])
+                else:  # optimal_action and query_state shouldn't be needed in eval
+                    val = traj[k]
                 _traj[k] = val
             _eval_trajs.append(_traj)
         experienced_rewards = [
@@ -168,8 +191,12 @@ def main(cfg: DictConfig):
                 {"sample_paths_context_len_{}".format(_context_length): wandb.Image(fig)}) 
             plt.clf()
 
-    ## Save performance given the full context length
     results = pd.DataFrame(results)
+    opt_return = results[results['model']=='Opt']['return'].mean()
+    results['path_length_scaled'] = (opt_return - results['return'])/opt_return
+    results['returns_scaled'] = results['return']/opt_return
+
+    ## Save performance given the full context length
     max_ctxt_length_results = results[results['context_length'] == max_context_length]
     fig, ax = plt.subplots()
     sns.barplot(data=max_ctxt_length_results, x='model', y='return', ax=ax)
@@ -183,24 +210,51 @@ def main(cfg: DictConfig):
     ## How does performance vary with context length?
     fig, ax = plt.subplots()
     sns.lineplot(
-        data=results, x='context_length', y='return', hue='model',
+        data=results, x='context_length', y='returns_scaled', hue='model',
         units='environment', estimator=None, ax=ax, alpha=0.2)
     sns.lineplot(
-        data=results, x='context_length', y='return', hue='model',
+        data=results, x='context_length', y='returns_scaled', hue='model',
         ax=ax)
     plt.legend()
     wandb_logger.experiment.log(
-        {"offline_performance_context_length_comparison": wandb.Image(fig)}) 
+        {"offline_returns_v_clen": wandb.Image(fig)}) 
     plt.clf()
 
     ## How does performance vary with experienced reward?
     fig, ax = plt.subplots()
     sns.lineplot(
-        data=results, x='experienced_reward', y='return',
+        data=results, x='experienced_reward', y='path_length_scaled',
         hue='model', ax=ax)
     plt.legend()
-    wandb_logger.experiment.log({"offline_performance_reward_comparison": wandb.Image(fig)}) 
+    wandb_logger.experiment.log({"offline_pathlen_v_expreward": wandb.Image(fig)}) 
     plt.clf()
+
+    results = results[results['model'] != 'Opt']
+    fig, ax = plt.subplots()
+    sns.scatterplot(
+        data=results, x='experienced_reward', y='path_length_scaled',
+        hue='model', ax=ax)
+    # Add exponential fit lines for each model
+    for model_name in results['model'].unique():
+        model_data = results[results['model'] == model_name]
+        x = model_data['experienced_reward']
+        y = model_data['path_length_scaled']
+        def exp_func(x, a, b, c):
+            return a * np.exp(-b * x) + c
+        try:
+            popt, _ = curve_fit(exp_func, x, y, p0=[1, 1e-3, 0])
+            x_fit = np.linspace(x.min(), x.max(), 100)
+            y_fit = exp_func(x_fit, *popt)
+            #color = next(ax._get_lines.prop_cycler)['color']
+            ax.plot(x_fit, y_fit, '--', label=f'{model_name} (fit)')
+        except:
+            continue
+    plt.legend()
+    wandb_logger.experiment.log({"offline_pathlen_v_expreward_scatter": wandb.Image(fig)}) 
+    plt.clf()
+
+    with open(os.path.join(model_storage_dir, 'eval_results.pkl'), 'wb') as f:
+        pickle.dump(results, f)
 
 if __name__ == '__main__':
     main()
