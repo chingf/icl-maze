@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch.nn.functional import elu
 from transformers import GPT2Model
 from transformers.models.gpt2.modeling_gpt2 import GPT2Block, GPT2PreTrainedModel, GPT2MLP, GPT2Attention
 from typing import Optional, Dict, Tuple, Union
@@ -121,11 +122,35 @@ class LinearAttention(GPT2Attention):
             raise NotImplementedError("LinearAttention does not support encoder_hidden_states")
         if (layer_past is not None) or (use_cache):
             raise NotImplementedError("LinearAttention does not support kv caching")
+        
+        if torch.isnan(hidden_states).any():
+            print("NaNs detected in hidden states")
+            raise ValueError("NaNs detected in the forward pass")
 
         bsz, q_len, _ = hidden_states.size()
 
         # Initial attention projections
         query, key, value = self.c_attn(hidden_states).split(self.split_size, dim=2)
+
+        if torch.isnan(query).any():
+            print("NaNs detected in query")
+            raise ValueError("NaNs detected in the forward pass")
+        if torch.isnan(key).any():
+            print("NaNs detected in key")
+            raise ValueError("NaNs detected in the forward pass")
+        if torch.isnan(value).any():
+            print("NaNs detected in value")
+            raise ValueError("NaNs detected in the forward pass")
+
+        if (query.abs()==torch.inf).any():
+            print("Infs detected in query")
+            raise ValueError("Infs detected in the forward pass")
+        if (key.abs()==torch.inf).any():
+            print("Infs detected in key")
+            raise ValueError("Infs detected in the forward pass")
+        if (value.abs()==torch.inf).any():
+            print("Infs detected in value")
+            raise ValueError("Infs detected in the forward pass")
 
         query = self._split_heads(query, self.num_heads, self.head_dim)
         key = self._split_heads(key, self.num_heads, self.head_dim)
@@ -144,13 +169,34 @@ class LinearAttention(GPT2Attention):
             is_causal=is_causal,
         )
 
+
+        if torch.isnan(attn_output).any():
+            print("NaNs detected in attn_output")
+            raise ValueError("NaNs detected in the forward pass")
+        if (attn_output.abs()==torch.inf).any():
+            print("Infs detected in attn_output")
+            raise ValueError("Infs detected in the forward pass")
+
         # Reshape outputs
         attn_output = attn_output.transpose(1, 2).contiguous()
         attn_output = attn_output.view(bsz, q_len, self.embed_dim)
-
+        if torch.isnan(attn_output).any():
+            print("NaNs detected in attn_output after reshaping")
+            raise ValueError("NaNs detected in the forward pass")
+        if (attn_output.abs()==torch.inf).any():
+            print("Infs detected in attn_output")
+            raise ValueError("Infs detected in the forward pass")
         # Final projection
         attn_output = self.c_proj(attn_output)
+        if torch.isnan(attn_output).any():
+            print("NaNs detected in attn_output after c_proj")
+            raise ValueError("NaNs detected in the forward pass")
+
         attn_output = self.resid_dropout(attn_output)
+
+        if torch.isnan(attn_output).any():
+            print("NaNs detected in attn_output after resid_dropout")
+            raise ValueError("NaNs detected in the forward pass")
 
         return attn_output, None, None
     
@@ -164,12 +210,11 @@ def linear_attention(query, key, value, attn_mask=None, dropout_p=0.0,
 
     L, S = query.size(-2), key.size(-2)
     scale_factor = 1 / sqrt(query.size(-1)) if scale is None else scale
-    final_attn_mask = torch.zeros(L, S, dtype=query.dtype).to(query.device)
+    final_attn_mask = torch.ones(L, S, dtype=query.dtype).to(query.device)
     if is_causal:
         assert attn_mask is None
         temp_mask = torch.ones(L, S, dtype=torch.bool).tril(diagonal=0)
         final_attn_mask.masked_fill_(temp_mask.logical_not(), 0.0)
-        final_attn_mask.to(query.dtype)
 
     if attn_mask is not None:
         if attn_mask.dtype == torch.bool:
@@ -177,7 +222,55 @@ def linear_attention(query, key, value, attn_mask=None, dropout_p=0.0,
         else:
             raise ValueError("LinearAttention does not support attn_mask of type other than bool")
 
-    attn_weight = query @ key.transpose(-2, -1) * scale_factor
-    attn_weight *= final_attn_mask
-    attn_weight = torch.dropout(attn_weight, dropout_p, train=True)
-    return attn_weight @ value
+    # Get norms for query and key
+    phi_query = phi(query)
+    if torch.isnan(phi_query).any():
+        print("NaNs detected in phi_query")
+        raise ValueError("NaNs detected in the forward pass")
+    if (phi_query.abs()==torch.inf).any():
+        print("Infs detected in phi_query")
+        raise ValueError("Infs detected in the forward pass")
+    phi_key = phi(key)
+    if torch.isnan(phi_key).any():
+        print("NaNs detected in phi_key")
+        raise ValueError("NaNs detected in the forward pass")
+    if (phi_key.abs()==torch.inf).any():
+        print("Infs detected in phi_key")
+        raise ValueError("Infs detected in the forward pass")
+    QK = phi_query @ phi_key.transpose(-2, -1) * scale_factor
+    QK *= final_attn_mask
+    QK = torch.dropout(QK, dropout_p, train=True)  # (batch, head, seq, seq)
+    if torch.isnan(QK).any():
+        print("NaNs detected in QK")
+        raise ValueError("NaNs detected in the forward pass")
+    if (QK.abs()==torch.inf).any():
+        print("Infs detected in normalizer")
+        raise ValueError("Infs detected in the forward pass")
+
+    normalizer = 1/(QK.sum(dim=-1)+1e-6)
+    if torch.isnan(normalizer).any():
+        print("NaNs detected in normalizer")
+        raise ValueError("NaNs detected in the forward pass")
+    if (normalizer.abs()==torch.inf).any():
+        print("Infs detected in normalizer")
+        raise ValueError("Infs detected in the forward pass")
+
+    result = (QK @ value)
+    if torch.isnan(result).any():
+        print("NaNs detected in attention result")
+        raise ValueError("NaNs detected in the forward pass")
+    if (result.abs()==torch.inf).any():
+        print("Infs detected in result")
+        raise ValueError("Infs detected in the forward pass")
+
+    result = result * normalizer[:,:,:,None]
+    if torch.isnan(result).any():
+        print("NaNs detected in attention result")
+        raise ValueError("NaNs detected in the forward pass")
+    if (result.abs()==torch.inf).any():
+        print("Infs detected in result")
+        raise ValueError("Infs detected in the forward pass")
+    return result
+
+def phi(x):
+    return elu(x) + 1
