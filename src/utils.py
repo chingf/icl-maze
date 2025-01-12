@@ -77,6 +77,11 @@ def build_env_name(env_config):
         env_filename += '_envs' + str(env_config['n_envs'])
         env_filename += '_H' + str(env_config['horizon'])
         env_filename += '_' + env_config['rollin_type']
+    elif env_filename == 'tree_lazy_loading':
+        env_filename += '_layers' + str(env_config['max_layers'])
+        env_filename += '_bprob' + str(env_config['branching_prob'])
+        env_filename += '_H' + str(env_config['horizon'])
+        env_filename += '_' + env_config['rollin_type']
     elif env_filename == 'tree':
         env_filename += '_layers' + str(env_config['max_layers'])
         env_filename += '_bprob' + str(env_config['branching_prob'])
