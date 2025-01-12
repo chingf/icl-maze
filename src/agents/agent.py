@@ -20,14 +20,14 @@ class OptPolicy(Agent):
 
 
 class TransformerAgent(Agent):
-    def __init__(self, model, batch_size=1, sample=False):
+    def __init__(self, model, batch_size=1, temp=2, sample=False):
         self.model = model
         self.state_dim = model.state_dim
         self.action_dim = model.action_dim
         self.zeros = torch.zeros(
             batch_size, self.state_dim ** 2 + self.action_dim + 1).float().to(device)
         self.sample = sample
-        self.temp = 2
+        self.temp = temp
         self.batch_size = batch_size
 
     def act(self, state):

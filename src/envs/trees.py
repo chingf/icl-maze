@@ -93,6 +93,8 @@ class TreeEnv(BaseEnv):
             'last_action': None,
             }
         
+        self.forbidden_states = None  # TODO: debug
+        
     def clone(self):
         """Creates a new TreeEnv instance with identical parameters."""
         return TreeEnv(
@@ -100,7 +102,8 @@ class TreeEnv(BaseEnv):
             branching_prob=self.branching_prob,
             horizon=self.horizon,
             initialization_seed=self.initialization_seed,
-            node_encoding=self.node_encoding
+            node_encoding=self.node_encoding,
+            goal=self.goal
         )
     
     def _find_encoding_by_position(self, layer, pos):
@@ -169,14 +172,19 @@ class TreeEnv(BaseEnv):
     def reset(self, from_origin=False):
         self.optimal_action_map, self.dist_from_goal = self.make_opt_action_dict()
         self.current_step = 0
+        forbidden_states = self.forbidden_states  # TODO: used for debugging, remove later
         if from_origin:
             self.state = np.array([0, 0])
         else:
             attempts = 0
             while True:
                 state = self.sample_state()
-                if self.dist_from_goal[tuple(state.tolist())] >= (self.max_layers - 1):
-                    break
+                if self.dist_from_goal[tuple(state.tolist())] >= 1.5*(self.max_layers - 1):
+                    s = state.tolist()
+                    if (forbidden_states is not None) and (s not in forbidden_states):
+                        break
+                    elif forbidden_states is None:
+                        break
                 attempts += 1
                 if attempts > 200:
                     import pdb; pdb.set_trace()
