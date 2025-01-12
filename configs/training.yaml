@@ -1,11 +1,11 @@
 defaults:
-  - model: transformer_end_query
+  - model: linear_transformer
   - env: tree
   - optimizer: default
   - _self_
 
 wandb:
-  project: 7layer #full7
+  project: lazyload
 
 seed: 0
 storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
