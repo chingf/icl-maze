@@ -158,13 +158,13 @@ class RNN(pl.LightningModule):
             lr=self.optimizer_config['lr'],
             weight_decay=self.optimizer_config['weight_decay']
         )
-        lr_scheduler = {  # linearly decrease LR from 1e-3 to 1e-4 over 75 epochs
+        lr_scheduler = {
             'scheduler': torch.optim.lr_scheduler.LinearLR(
                 optimizer,
-                start_factor=1.0,  # Start at 1e-3 (10x higher than final 1e-4) 
-                end_factor=0.01,     # End at 1e-4
-                total_iters=100,      # Linear decrease over 50 epochs
+                start_factor=1.0,
+                end_factor=0.1,
+                total_iters=10,
             ),
             'monitor': 'val_loss',
         }
-        return {'optimizer': optimizer, 'lr_scheduler': lr_scheduler}
+        return {'optimizer': optimizer} #, 'lr_scheduler': lr_scheduler}
