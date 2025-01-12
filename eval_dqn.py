@@ -72,15 +72,16 @@ def main(cfg: DictConfig):
         'experienced_reward': [],
         'context_length': []
     }
-    context_lengths = np.linspace(100, max_context_length, 20, dtype=int)
-    context_lengths = context_lengths[context_lengths < 1200]
+    max_context_length = 1200
+    context_lengths = np.arange(0, max_context_length+100, 100, dtype=int)
+    context_lengths[0] = 10
     context_lengths_to_visualize = [
         context_lengths[context_lengths.size//10],
         context_lengths[context_lengths.size//3],
         context_lengths[2*(context_lengths.size//3)],
-        context_lengths[-1]
+        context_lengths[-1],
         ]
-    for context_length in context_lengths:
+    for context_length in context_lengths:  # TODO: debug
         log_and_visualize = context_length in context_lengths_to_visualize
         _results = eval_offline_by_context_length(
             model_config, env_config, optimizer_config, train_trajs,
@@ -122,6 +123,7 @@ def eval_offline_by_context_length(
     }
     eval_func = EvalTrees()
     agent_trajectories = [[], []]
+
     for i, traj in enumerate(train_trajs):
         print(f'...environment {i}')
         _traj = {}
@@ -162,12 +164,18 @@ def train_and_eval_agent(
         model, env, optimizer_config, traj, n_eval_episodes,
         log_and_visualize=False, debug=False):
     eval_func = EvalTrees()
-
     model.store_transition_from_dict(traj)
     n_training_samples = model.get_buffer_size()
     n_training_epochs = optimizer_config['num_epochs']
     eval_every = max(1, n_training_epochs // 25)
     eval_envs = [env.clone() for _ in range(n_eval_episodes)]
+
+    # TODO: debug block
+    all_states = np.vstack([traj['context_states'], traj['context_next_states']])
+    all_states = np.unique(all_states, axis=0).tolist()
+    experienced_reward = np.sum(traj['context_rewards']).item()
+    print("rewards experienced: ", experienced_reward)
+    print("Number of seen states: ", len(all_states))
 
     if log_and_visualize:
         wandb.define_metric("custom_step")
@@ -178,6 +186,10 @@ def train_and_eval_agent(
     best_q_loss_epoch = None
     best_q_loss_state_dict = None
     for i in range(n_training_epochs):
+        #if i > 50:
+        #    debug = True
+        #    xx = [traj['context_next_states'][i] for i in range(traj['context_rewards'].size) if traj['context_rewards'][i]>0]
+        #    import pdb; pdb.set_trace()
         losses = model.training_epoch()
         loss = np.mean(losses)
         if log_and_visualize:
@@ -213,6 +225,8 @@ def train_and_eval_agent(
     epoch_eval_returns, trajectories = model.deploy_vec(
         eval_envs, env.horizon)
     epoch_eval_returns = np.mean(epoch_eval_returns)
+
+    print("Eval returns: ", epoch_eval_returns)  # TODO: debug statement
 
     return epoch_eval_returns, trajectories[0]
 
