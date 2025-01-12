@@ -15,11 +15,16 @@ from src.utils import (
 @hydra.main(version_base=None, config_path="configs", config_name="data_collection")
 def main(cfg: DictConfig):
     env_config = OmegaConf.to_container(cfg.env, resolve=True)
+    if env_config['env'] != 'tree':
+        raise ValueError("This script is for trees only")
+    if env_config['branching_prob'] == 1.:
+        raise ValueError("This script is for trees with branch probability < 1")
+
     env_name = build_env_name(env_config)
     dataset_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/datasets'
     os.makedirs(dataset_storage_dir, exist_ok=True)
-    goal_total_seeds = env_config['goal_total_seeds']
-    n_search_seeds = env_config['n_search_seeds']
+    goal_total_seeds = env_config['n_envs']
+    n_search_seeds = goal_total_seeds*3
 
     seeds_found = 0 
     unique_seeds_info = {}
@@ -40,6 +45,8 @@ def main(cfg: DictConfig):
                 raise e
         env_goal = tuple(env.goal.tolist())
         env_struct = tuple(sorted(env.node_map.keys()))
+        if len(env.node_map.keys()) == (env.max_layers**2 - 1):
+            continue  # Full trees will be saved separately
 
         if env_struct not in unique_seeds_info.keys():
             unique_seeds_info[env_struct] = []
