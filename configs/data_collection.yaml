@@ -2,6 +2,8 @@ defaults:
   - env: tree
   - _self_
 
+from_origin: False
+
 wandb:
   project: lazyload
 
