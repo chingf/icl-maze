@@ -129,7 +129,15 @@ class Transformer(pl.LightningModule):
             inputs_embeds=stacked_inputs,
             attention_mask=attention_mask
         )
+        if torch.isnan(transformer_outputs['last_hidden_state']).any():
+            print("NaNs detected in the transformer outputs forward pass")
+            raise ValueError("NaNs detected in the forward pass")
+
         preds = self.pred_actions(transformer_outputs['last_hidden_state'])
+
+        if torch.isnan(preds).any():
+            print("NaNs detected in the pred forward pass")
+            raise ValueError("NaNs detected in the forward pass")
 
         if self.test:
             return preds[:, -1, :]
@@ -166,6 +174,14 @@ class Transformer(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         batch_size = batch['query_states'].shape[0]
         loss, accuracy = self.batch_forward(batch, batch_idx)
+
+        if torch.isnan(loss).any():
+            print("NaNs detected in the loss")
+            raise ValueError("NaNs detected in the loss")
+        if (loss.abs()==torch.inf).any():
+            print("Infs detected in the loss")
+            raise ValueError("Infs detected in the loss")
+
         self.log(
             'train_loss', loss/batch_size,
             on_epoch=True, on_step=False, prog_bar=True)
@@ -211,6 +227,20 @@ class Transformer(pl.LightningModule):
             delattr(model, 'wte')
         except:
             print('Attempted to delete WTE in transformer, but could not find.')
+
+    #def on_after_backward(self):
+    #    # Check for NaNs in gradients
+    #    for name, param in self.named_parameters():
+    #        if param.grad is not None and torch.isnan(param.grad).any():
+    #            print(f"NaNs detected in gradients of {name}")
+    #            raise ValueError(f"NaNs detected in gradients of {name}")
+    #        
+    #        if torch.isnan(param).any():
+    #            print(f"NaNs detected in model parameters of {name}")
+    #            raise ValueError(f"NaNs detected in model parameters of {name}")
+    #        
+    #        norm = torch.norm(param.data).item()
+    #        print(f"{name}: {norm:.6f}")
 
 
 class ImageTransformer(Transformer):
