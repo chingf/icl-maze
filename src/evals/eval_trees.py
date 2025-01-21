@@ -24,12 +24,15 @@ class EvalTrees(EvalDarkroom):
     def create_env(self, config, goal, i_eval):
         _config = {
             'max_layers': config['max_layers'],
-            'initialization_seed': config['initialization_seed'][i_eval],
             'horizon': config['horizon'],
             'branching_prob': config['branching_prob'],
             'node_encoding': config['node_encoding'],
             'goal': goal
             }
+        if isinstance(config['initialization_seed'], list):
+            _config['initialization_seed'] = config['initialization_seed'][i_eval]
+        else:
+            _config['initialization_seed'] = config['initialization_seed']
         return TreeEnv(**_config)
 
     def create_vec_env(self, envs):
