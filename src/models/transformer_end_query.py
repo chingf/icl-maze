@@ -8,6 +8,7 @@ import transformers
 transformers.set_seed(0)
 from transformers import GPT2Config
 from src.models.simple_gpt2 import SimpleGPT2Model
+from src.models.fixedmemory_gpt2 import FixedMemoryGPT2Model
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
@@ -58,6 +59,7 @@ class Transformer(pl.LightningModule):
         self.pred_actions = nn.Linear(self.n_embd, self.action_dim)
         self.loss_fn = nn.CrossEntropyLoss(reduction='sum')
         self.save_activations = False
+        self.pass_query_locations_into_transformer = False
 
     def forward_inference_mode(self, x):
         query_states = x['query_states'][:, None, :]
@@ -74,13 +76,8 @@ class Transformer(pl.LightningModule):
         seq_len = seq.shape[1]
         stacked_inputs = self.embed_transition(seq)
 
-        # Make attention matrix
-        # Create attention mask matrix of query_locations size
-        #attention_mask = torch.tril(torch.ones(seq_len, seq_len))
-        #attention_mask = attention_mask.bool().to(stacked_inputs.device)
-        transformer_outputs = self.transformer(
+        transformer_outputs = self.transformer(  # Automaticallly causal
             inputs_embeds=stacked_inputs,
-            #attention_mask=attention_mask,
             output_attentions=self.save_activations,
             output_hidden_states=self.save_activations
         )
@@ -129,10 +126,15 @@ class Transformer(pl.LightningModule):
         attention_mask[:, query_locations] = 0
         attention_mask[query_locations, query_locations] = 1
         attention_mask = attention_mask.bool().to(stacked_inputs.device)
-        transformer_outputs = self.transformer(
-            inputs_embeds=stacked_inputs,
-            attention_mask=attention_mask
-        )
+
+        # Pass into transformer
+        transformer_inputs = {
+            'inputs_embeds': stacked_inputs,
+            'attention_mask': attention_mask
+        }
+        if self.pass_query_locations_into_transformer:
+            transformer_inputs['query_locations'] = query_locations
+        transformer_outputs = self.transformer(**transformer_inputs)
         if torch.isnan(transformer_outputs['last_hidden_state']).any():
             print("NaNs detected in the transformer outputs forward pass")
             raise ValueError("NaNs detected in the forward pass")
@@ -249,3 +251,50 @@ class Transformer(pl.LightningModule):
     #        
     #        norm = torch.norm(param.data).item()
     #        print(f"{name}: {norm:.6f}")
+
+class FixedMemoryTransformer(Transformer):
+    """Transformer class."""
+
+    def __init__(
+        self,
+        n_embd: int,
+        n_layer: int,
+        n_head: int,
+        state_dim: int,
+        action_dim: int,
+        dropout: float,
+        train_on_last_pred_only: bool,
+        test: bool,
+        name: str,
+        optimizer_config: dict,
+        ):
+
+        pl.LightningModule.__init__(self)
+
+        self.n_embd = n_embd
+        self.n_layer = n_layer
+        self.n_head = n_head
+        self.state_dim = state_dim
+        self.action_dim = action_dim
+        self.dropout = dropout
+        self.train_on_last_pred_only = train_on_last_pred_only
+        self.test = test
+        self.optimizer_config = optimizer_config = optimizer_config
+
+        config = GPT2Config(
+            n_positions=2000,  # Position embeddings are not used, but make sure it's > seq length for inference mode
+            n_embd=self.n_embd,
+            n_layer=self.n_layer,
+            n_head=self.n_head,
+            resid_pdrop=self.dropout,
+            embd_pdrop=self.dropout,
+            attn_pdrop=self.dropout,
+            use_cache=False,
+        )
+        self.transformer = FixedMemoryGPT2Model(config)
+        self.embed_transition = nn.Linear(
+            2 * self.state_dim + self.action_dim + 1, self.n_embd)
+        self.pred_actions = nn.Linear(self.n_embd, self.action_dim)
+        self.loss_fn = nn.CrossEntropyLoss(reduction='sum')
+        self.save_activations = False
+        self.pass_query_locations_into_transformer = True

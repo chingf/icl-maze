@@ -98,11 +98,13 @@ class SimpleGPT2Block(GPT2Block):
 
             self.mlp = GPT2MLP(inner_dim, config)
 
-
+from torch.nn import GroupNorm
 class LinearAttention(GPT2Attention):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.require_contiguous_qkv = False
+        self.group_norm = None #GroupNorm(4, self.head_dim)  # TODO: initialize modules here
+        self.feature_maps = None #nn.LayerNorm(self.head_dim)
 
     def forward(
         self,
@@ -143,6 +145,8 @@ class LinearAttention(GPT2Attention):
             attn_mask=attention_mask,
             dropout_p=self.attn_dropout.p if self.training else 0.0,
             is_causal=is_causal,
+            groupnorm=self.group_norm,
+            feature_maps=self.feature_maps
         )
 
 
@@ -164,7 +168,7 @@ class LinearAttention(GPT2Attention):
     
 # Efficient implementation equivalent to the following:
 def linear_attention(query, key, value, attn_mask=None, dropout_p=0.0,
-        is_causal=False, scale=None) -> torch.Tensor:
+        is_causal=False, scale=None, groupnorm=None, feature_maps=None) -> torch.Tensor:
     """
     In regular sdpa, the line "attn_weight = torch.softmax(attn_weight, dim=-1)"
     is run after attn_bias is added. Here, we skip the softmax.
@@ -186,24 +190,46 @@ def linear_attention(query, key, value, attn_mask=None, dropout_p=0.0,
         
 
     # Get norms for query and key
-    query = query * scale_factor
-    phi_query = phi(query)  # (batch, head, seq, emb)
-    phi_query = normalize(phi_query, dim=-1)
+    query = query #* scale_factor
+    phi_query = torch.nn.functional.softmax(query, dim=-1)
+    #if feature_maps is not None:
+    #    phi_query = feature_maps(phi_query)
+    #    phi_query = phi(query)
+    #phi_query = normalize(phi_query, dim=-1)
+    #phi_query = reshape_and_apply_groupnorm(phi_query, groupnorm)
+    #phi_query = phi(phi_query)  # (batch, head, seq, emb)
 
-    key = key * scale_factor
-    phi_key = phi(key)  # (batch, head, seq, emb)
-    phi_key = normalize(phi_key, dim=-1)
+    key = key #* scale_factor
+    phi_key = torch.nn.functional.softmax(key, dim=-1)
+    #if feature_maps is not None:
+    #    phi_key = feature_maps(phi_key)
+    #    phi_key = phi(phi_key)
+    #phi_key = normalize(phi_key, dim=-1)
+    #phi_key = reshape_and_apply_groupnorm(phi_key, groupnorm)
+    #phi_key = phi(phi_key)  # (batch, head, seq, emb)
 
     #KV = torch.einsum('bhnd,bhne->bhde', phi_key, value)
-    #out = torch.einsum('bhnd,bhde->bhne', phi_query, KV)  # (Q*(KV))
-    ##normalizer = torch.einsum('bhnd,bhnd->bhn', phi_query, phi_key).unsqueeze(-1)
-    #result = out #/ (normalizer + 1e-8)    
+    #out = torch.einsum('bhnd,bhde->bhne', final_attn_mask * phi_query, KV)  # (Q*(KV))
+    #normalizer = torch.einsum('bhnd,bhnd->bhn', final_attn_mask * phi_query, phi_key).unsqueeze(-1)
+    #result = out / (normalizer + 1e-8)    
 
     QK = phi_query @ phi_key.transpose(-2, -1)
     QK *= final_attn_mask
+    #QK = QK / (final_attn_mask.sum(dim=-1, keepdim=True) + 1e-8)   # TODO: Try length normalization
+    #QK = QK / (QK.sum(dim=-1, keepdim=True) + 1e-8)   # TODO: Try QK normalization
     QK = torch.dropout(QK, dropout_p, train=True)  # (batch, head, seq, seq)
-    result = QK @ value
+    result = QK @ value  # (batch, head, seq, emb)
+    #if groupnorm is not None:
+    #    result = reshape_and_apply_groupnorm(result, groupnorm)
     return result
+
+
+def reshape_and_apply_groupnorm(x, groupnorm):
+    orig_shape = x.shape
+    x = x.reshape(-1, orig_shape[-1])
+    x = groupnorm(x)
+    x = x.reshape(orig_shape)
+    return x
 
 def phi(x):
     return elu(x) + 1
