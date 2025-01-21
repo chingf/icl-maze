@@ -8,6 +8,8 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning import LightningDataModule
+from pytorch_lightning.callbacks import Callback
+
 import wandb
 wandb.login()
 
@@ -18,6 +20,7 @@ from src.utils import (
     build_env_name,
     build_model_name,
     build_dataset_name,
+    ShuffleIndicesCallback
 )
 
 torch.set_float32_matmul_precision('medium')
@@ -26,8 +29,6 @@ n_gpus = torch.cuda.device_count()
 
 @hydra.main(version_base=None, config_path="configs", config_name="training")
 def main(cfg: DictConfig):
-    np.random.seed(0)  # TODO: figure out what's happening with seeds
-    random.seed(0)
     env_config = OmegaConf.to_container(cfg.env, resolve=True)
     optimizer_config = OmegaConf.to_container(cfg.optimizer, resolve=True)
     model_config = OmegaConf.to_container(cfg.model, resolve=True)
@@ -52,7 +53,7 @@ def main(cfg: DictConfig):
     os.makedirs(model_storage_dir, exist_ok=True)
 
     # Random seed handling 
-    tmp_seed = seed = cfg.seed  # TODO: figure out what's happening with seeds
+    tmp_seed = seed = cfg.seed
     if seed == -1:
         tmp_seed = 0
     torch.manual_seed(tmp_seed)
@@ -87,6 +88,8 @@ def main(cfg: DictConfig):
         }
         with open(f'{model_storage_dir}/run_info.json', 'w') as f:
             json.dump(run_info, f)
+    with open(f'{model_storage_dir}/model_config.json', 'w') as f:
+        json.dump(model_config, f)
 
     # Checkpoint top K models and last model
     checkpoint_callback = ModelCheckpoint(
@@ -107,12 +110,28 @@ def main(cfg: DictConfig):
         verbose=True,
     )
 
+    # Dataset shuffler callback
+    shuffle_indices_callback = ShuffleIndicesCallback()
+
+    # Gradient clipping callback
+    class GradientNormLogger(Callback):
+        def on_after_backward(self, trainer, pl_module):
+            if trainer.global_step % 100 == 0:
+                # Calculate the gradient norm
+                total_norm = 0
+                for p in pl_module.parameters():
+                    if p.grad is not None:
+                        param_norm = p.grad.data.norm(2)
+                        total_norm += param_norm.item() ** 2
+                total_norm = total_norm ** 0.5
+                print(f'Gradient Norm: {total_norm}')
+
+
     # Set up trainer
-    # Set up gradient clipping
     trainer = pl.Trainer(
         max_epochs=optimizer_config['num_epochs'],
         logger=wandb_logger,
-        callbacks=[checkpoint_callback],
+        callbacks=[checkpoint_callback, shuffle_indices_callback, GradientNormLogger()],
         accelerator='auto',
         devices='auto',
         strategy='auto',

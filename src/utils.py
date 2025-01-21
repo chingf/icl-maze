@@ -3,8 +3,11 @@ import torch
 import os
 import glob
 import random
+from pytorch_lightning.callbacks import Callback
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+## Generally useful functions
 
 def worker_init_fn(worker_id):
     worker_seed = torch.initial_seed() % (2**32) + worker_id
@@ -12,12 +15,29 @@ def worker_init_fn(worker_id):
     numpy_seed = int(worker_seed % (2**32 - 1))  # Optional, in case you also use numpy in the DataLoader
     np.random.seed(numpy_seed)
 
-
 def convert_to_tensor(x, store_gpu=True):
     if store_gpu:
         return torch.tensor(np.asarray(x)).float().to(device)
     else:
         return torch.tensor(np.asarray(x)).float()
+    
+def set_all_seeds(seed=None):
+    if seed == None:
+        torch.seed()
+    else:
+        torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+
+
+## Things for training
+class ShuffleIndicesCallback(Callback):
+    def on_train_epoch_end(self, trainer, pl_module):
+        if hasattr(trainer.datamodule.train_dataset, 'indices'):
+            trainer.datamodule.train_dataset.shuffle_indices()
+
+
+## Functions for evaluation
     
 def find_ckpt_file(ckpt_dir, epoch):
     if isinstance(epoch, str):
@@ -55,13 +75,6 @@ def find_ckpt_file(ckpt_dir, epoch):
             ckpt_name = 'last.ckpt'  # Use last checkpoint if epoch not specified
     return ckpt_name
 
-def set_all_seeds(seed=None):
-    if seed == None:
-        torch.seed()
-    else:
-        torch.manual_seed(seed)
-    random.seed(seed)
-    np.random.seed(seed)
 
 ## Filename generation
 
