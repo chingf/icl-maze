@@ -195,8 +195,11 @@ class TreeEnv(BaseEnv):
     def make_opt_action_dict(self):
         """Creates a dictionary mapping (current_node, target_node) to optimal action.
         Uses BFS to find shortest paths to each target."""
-        target_node = self.node_map[tuple(self.goal.tolist())]
-        
+        target_node_encoding = tuple(self.goal.tolist())
+        return self._make_opt_action_dict(target_node_encoding)
+
+    def _make_opt_action_dict(self, target_node_encoding):
+        target_node = self.node_map[target_node_encoding]
         queue = [target_node]  # (node, action_to_reach_it)
         visited = set()
         visited.add(target_node.encoding())
