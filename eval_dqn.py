@@ -1,5 +1,7 @@
 import os
 import pickle
+import h5py
+import random
 import matplotlib.pyplot as plt
 import torch
 from IPython import embed
@@ -40,7 +42,14 @@ def main(cfg: DictConfig):
     model_name = build_model_name(model_config, optimizer_config)
     dataset_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/datasets'
     model_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/models/{model_name}'
-    train_dset_path = os.path.join(dataset_storage_dir, build_dataset_name(0))
+    os.makedirs(model_storage_dir, exist_ok=True)
+    if cfg.override_eval_dataset_path != None:
+        eval_dset_path = cfg.override_eval_dataset_path
+        for param in cfg.override_params:
+            for k, v in param.items():
+                env_config[k] = v
+    else:
+        eval_dset_path = os.path.join(dataset_storage_dir, build_dataset_name(2))
     max_context_length = env_config['horizon']
     wandb_config = {
         'env': env_config,
@@ -58,12 +67,27 @@ def main(cfg: DictConfig):
     )
 
     # Load trajectories
-    with open(train_dset_path, 'rb') as f:  # TODO: switch to training dataset
-        train_trajs = pickle.load(f)  # List of dicts
-    n_eval_envs = min(cfg.n_eval_envs, len(train_trajs))
-    train_trajs = train_trajs[:n_eval_envs]
+    is_h5_file = eval_dset_path.endswith('.h5')
+    if is_h5_file:
+        eval_trajs = h5py.File(eval_dset_path, 'r')
+        traj_indices = list(eval_trajs.keys())
+        n_eval_envs = min(cfg.n_eval_envs, len(traj_indices))
+        random.seed(0)
+        traj_indices = random.sample(traj_indices, n_eval_envs)
+        random.seed()
+        eval_trajs = [eval_trajs[i] for i in traj_indices]
+    else:  # Pickle file
+        with open(eval_dset_path, 'rb') as f:
+            eval_trajs = pickle.load(f)
+        n_eval_envs = min(cfg.n_eval_envs, len(eval_trajs))
+        random.seed(0)
+        eval_trajs = random.sample(eval_trajs, n_eval_envs)
+        random.seed()
     env_config['initialization_seed'] = [
-        train_trajs[i_eval]['initialization_seed'] for i_eval in range(len(train_trajs))]
+        np.array(eval_trajs[i_eval]['initialization_seed']).item() for i_eval in range(len(eval_trajs))]
+    max_context_length = eval_trajs[0]['context_rewards'].shape[0]
+    max_context_length = min(max_context_length, 1200)
+    print(f'Max context length: {max_context_length}')
 
     # Fully offline evaluation of context length-dependency 
     results = {
@@ -72,19 +96,18 @@ def main(cfg: DictConfig):
         'experienced_reward': [],
         'context_length': []
     }
-    max_context_length = 1200
-    context_lengths = np.arange(0, max_context_length+100, 100, dtype=int)
+    context_lengths = np.linspace(0, max_context_length, 20, dtype=int)
     context_lengths[0] = 10
     context_lengths_to_visualize = [
         context_lengths[context_lengths.size//10],
         context_lengths[context_lengths.size//3],
         context_lengths[2*(context_lengths.size//3)],
         context_lengths[-1],
-        ]
-    for context_length in context_lengths:  # TODO: debug
+    ]
+    for context_length in context_lengths:
         log_and_visualize = context_length in context_lengths_to_visualize
         _results = eval_offline_by_context_length(
-            model_config, env_config, optimizer_config, train_trajs,
+            model_config, env_config, optimizer_config, eval_trajs,
             context_length, cfg.test_horizon, cfg.n_eval_episodes,
             log_and_visualize)
         results = {k: results[k] + _results[k] for k in results.keys()}
@@ -109,9 +132,12 @@ def main(cfg: DictConfig):
     wandb.log({"offline_performance_reward_comparison": wandb.Image(fig)}) 
     plt.clf()
 
+    with open(os.path.join(model_storage_dir, 'eval_results.pkl'), 'wb') as f:
+        pickle.dump(results, f)
+
 
 def eval_offline_by_context_length(
-    model_config, env_config, optimizer_config, train_trajs,
+    model_config, env_config, optimizer_config, eval_trajs,
     context_length, test_horizon, n_eval_episodes, log_and_visualize):
     print(f'\nEvaluating context length {context_length}')
 
@@ -124,11 +150,18 @@ def eval_offline_by_context_length(
     eval_func = EvalTrees()
     agent_trajectories = [[], []]
 
-    for i, traj in enumerate(train_trajs):
+    for i, traj in enumerate(eval_trajs):
         print(f'...environment {i}')
         _traj = {}
         for k in traj.keys():
-            val = traj[k][:context_length] if 'context' in k else traj[k]
+            if 'context' in k:
+                val = traj[k][:context_length]
+            elif k == 'initialization_seed':
+                val = np.array(traj[k]).item()
+            elif k == 'goal':
+                val = np.array(traj[k])
+            else:  # optimal_action and query_state shouldn't be needed in eval
+                val = traj[k]
             _traj[k] = val
         experienced_reward = np.sum(_traj['context_rewards']).item()
         env = eval_func.create_env(env_config, _traj['goal'], i)
