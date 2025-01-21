@@ -1,8 +1,8 @@
 _target_: src.models.transformer_end_query.Transformer
-name: linear_transformer
-n_embd: 512
+name: linear_transformer_softmaxphi
+n_embd: 800
 n_layer: 4
 n_head: 4
-dropout: 0.1
+dropout: 0.
 train_on_last_pred_only: False
 linear_attention: True

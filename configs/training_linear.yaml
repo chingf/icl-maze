@@ -5,11 +5,17 @@ defaults:
   - _self_
 
 wandb:
-  project: lazyload #7layer
+  project: 7layer
 
-#env:
-#  n_envs: 100000
+optimizer:
+  lr: 1e-4
+  batch_size: 128
+  num_epochs: 100
+  use_scheduler: False
+
+env:
+  n_envs: 300000
+  store_gpu: True
 
 seed: 0
 storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
-#storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze
