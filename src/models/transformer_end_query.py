@@ -43,7 +43,7 @@ class Transformer(pl.LightningModule):
         self.linear_attention = linear_attention
 
         config = GPT2Config(
-            n_positions=1000,  # Arbitrary, as position embeddings are not used
+            n_positions=2000,  # Position embeddings are not used, but make sure it's > seq length for inference mode
             n_embd=self.n_embd,
             n_layer=self.n_layer,
             n_head=self.n_head,
@@ -56,8 +56,8 @@ class Transformer(pl.LightningModule):
         self.embed_transition = nn.Linear(
             2 * self.state_dim + self.action_dim + 1, self.n_embd)
         self.pred_actions = nn.Linear(self.n_embd, self.action_dim)
-
         self.loss_fn = nn.CrossEntropyLoss(reduction='sum')
+        self.save_activations = False
 
     def forward_inference_mode(self, x):
         query_states = x['query_states'][:, None, :]
@@ -76,12 +76,16 @@ class Transformer(pl.LightningModule):
 
         # Make attention matrix
         # Create attention mask matrix of query_locations size
-        attention_mask = torch.tril(torch.ones(seq_len, seq_len))
-        attention_mask = attention_mask.bool().to(stacked_inputs.device)
+        #attention_mask = torch.tril(torch.ones(seq_len, seq_len))
+        #attention_mask = attention_mask.bool().to(stacked_inputs.device)
         transformer_outputs = self.transformer(
             inputs_embeds=stacked_inputs,
-            attention_mask=attention_mask
+            #attention_mask=attention_mask,
+            output_attentions=self.save_activations,
+            output_hidden_states=self.save_activations
         )
+        if self.save_activations:
+            self.activations = transformer_outputs
         preds = self.pred_actions(transformer_outputs['last_hidden_state'])
         return preds[:, -1, :]
 
@@ -207,16 +211,20 @@ class Transformer(pl.LightningModule):
             lr=self.optimizer_config['lr'],
             weight_decay=self.optimizer_config['weight_decay']
         )
-        lr_scheduler = {  # linearly decrease LR from 1e-3 to 1e-4 over 75 epochs
-            'scheduler': torch.optim.lr_scheduler.LinearLR(
+        optimizer_dict = {'optimizer': optimizer}
+
+        if self.optimizer_config['use_scheduler']:
+            lr_scheduler = {  # linearly decrease LR
+                'scheduler': torch.optim.lr_scheduler.LinearLR(
                 optimizer,
-                start_factor=1.0,  # Start at 1e-3 (10x higher than final 1e-4) 
-                end_factor=0.1,     # End at 1e-4
-                total_iters=50,      # Linear decrease over 50 epochs
+                start_factor=1.0,
+                end_factor=0.1,
+                total_iters=50,
             ),
             'monitor': 'val_loss',
-        }
-        return {'optimizer': optimizer, 'lr_scheduler': lr_scheduler}
+            }
+            optimizer_dict['lr_scheduler'] = lr_scheduler
+        return optimizer_dict
     
     def remove_unused_params(self, model):
         try:
@@ -241,90 +249,3 @@ class Transformer(pl.LightningModule):
     #        
     #        norm = torch.norm(param.data).item()
     #        print(f"{name}: {norm:.6f}")
-
-
-class ImageTransformer(Transformer):
-    """Transformer class for image-based data."""
-
-    def __init__(
-        self,
-        n_embd: int,
-        n_layer: int,
-        n_head: int,
-        state_dim: int,
-        action_dim: int,
-        dropout: float,
-        test: bool,
-        name: str,
-        optimizer_config: dict,
-        image_size: int,
-        im_embd: int,
-        ):
-
-        super().__init__(n_embd, n_layer, n_head, state_dim, action_dim,
-                         dropout, test, name, optimizer_config)
-        self.im_embd = im_embd
-        size = image_size
-        size = (size - 3) // 2 + 1
-        size = (size - 3) // 2 + 1
-        size = (size - 3) // 1 + 1
-
-        self.image_encoder = nn.Sequential(
-            nn.Conv2d(3, 16, kernel_size=3, stride=2),
-            nn.ReLU(),
-            nn.Conv2d(16, 16, kernel_size=3, stride=1),
-            nn.ReLU(),
-            nn.Dropout(self.dropout),
-            nn.Flatten(start_dim=1),
-            nn.Linear(int(16 * size * size), self.im_embd),
-            nn.ReLU(),
-        )
-
-        new_dim = self.im_embd + self.state_dim + self.action_dim + 1
-        self.embed_transition = torch.nn.Linear(new_dim, self.n_embd)
-        self.embed_ln = nn.LayerNorm(self.n_embd)
-
-    def forward(self, x):
-        query_images = x['query_images'][:, None, :]
-        query_states = x['query_states'][:, None, :]
-        context_images = x['context_images']
-        context_states = x['context_states']
-        context_actions = x['context_actions']
-        context_rewards = x['context_rewards']
-
-        if len(context_rewards.shape) == 2:
-            context_rewards = context_rewards[:, :, None]
-
-        batch_size = query_states.shape[0]
-
-        image_seq = torch.cat([query_images, context_images], dim=1)
-        image_seq = image_seq.view(-1, *image_seq.size()[2:])
-
-        image_enc_seq = self.image_encoder(image_seq)
-        image_enc_seq = image_enc_seq.view(batch_size, -1, self.im_embd)
-
-        context_states = torch.cat([query_states, context_states], dim=1)
-        context_actions = torch.cat([
-            torch.zeros(batch_size, 1, self.action_dim).to(device),
-            context_actions,
-        ], dim=1)
-        context_rewards = torch.cat([
-            torch.zeros(batch_size, 1, 1).to(device),
-            context_rewards,
-        ], dim=1)
-
-        stacked_inputs = torch.cat([
-            image_enc_seq,
-            context_states,
-            context_actions,
-            context_rewards,
-        ], dim=2)
-        stacked_inputs = self.embed_transition(stacked_inputs)
-        stacked_inputs = self.embed_ln(stacked_inputs)
-
-        transformer_outputs = self.transformer(inputs_embeds=stacked_inputs)
-        preds = self.pred_actions(transformer_outputs['last_hidden_state'])
-
-        if self.test:
-            return preds[:, -1, :]
-        return preds[:, 1:, :]
