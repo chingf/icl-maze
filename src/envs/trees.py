@@ -174,7 +174,7 @@ class TreeEnv(BaseEnv):
         self.current_step = 0
         forbidden_states = self.forbidden_states  # TODO: used for debugging, remove later
         if from_origin:
-            self.state = np.array([0, 0])
+            return list(self.root.encoding_vector)
         else:
             attempts = 0
             while True:
