@@ -159,6 +159,8 @@ class FixedMemoryAttention(GPT2Attention):
     ) -> Tuple[Union[torch.Tensor, Tuple[torch.Tensor]], ...]:
         if output_attentions:
             raise NotImplementedError("FixedMemoryAttention does not support output_attentions")
+        if (self.layer_idx == 0) and (overwrite_kv is not None):
+            raise NotImplementedError("FixedMemoryAttention does not support overwrite_kv for layer 0")
 
         bsz, q_len, _ = hidden_states.size()
         query, key, value = self.c_attn(hidden_states).split(self.split_size, dim=2)
@@ -169,14 +171,11 @@ class FixedMemoryAttention(GPT2Attention):
 
         if overwrite_kv is not None:
             if query_locations is None:
-                memory_tokens = torch.ones(q_len, dtype=torch.bool).to(overwrite_kv['key'].device)
-                memory_tokens[-1] = False
-            else:
-                memory_tokens = query_locations.logical_not()
-            memory_tokens_mask = torch.ones_like(key)  # Zero out memory tokens
-            memory_tokens_mask[:, :, memory_tokens, :] = 0
-            query_tokens_mask = torch.zeros_like(key)  # Zero out query tokens
-            query_tokens_mask[:, :, memory_tokens, :] = 1
+                query_locations = torch.zeros(q_len, dtype=torch.bool).to(overwrite_kv['key'].device)
+                query_locations[-1] = True
+            query_tokens_mask = torch.ones_like(key)  # Zero out query tokens
+            query_tokens_mask[:, :, query_locations, :] = 0
+            memory_tokens_mask = 1 - query_tokens_mask  # Flip 1s and 0s
             key = key * memory_tokens_mask + overwrite_kv[0] * query_tokens_mask
             value = value * memory_tokens_mask + overwrite_kv[1] * query_tokens_mask
 

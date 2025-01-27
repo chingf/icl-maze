@@ -10,6 +10,14 @@ wandb:
 model:
   _target_: src.models.transformer_end_query.FixedMemoryTransformer
   name: fixedmemory_transformer
+  n_embd: 800
+  n_head: 4
+  n_layer: 4
+  dropout: 0
+
+optimizer:
+  batch_size: 256
+  lr: 1e-5
 
 #env:
 #  n_envs: 300000
