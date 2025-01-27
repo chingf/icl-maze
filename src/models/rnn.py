@@ -21,9 +21,6 @@ class RNN(pl.LightningModule):
         test: bool,
         name: str,
         optimizer_config: dict,
-        train_on_last_pred_only: bool,
-        separate_context_and_query: bool,
-        query_at_end: bool,
         ):
 
         super(RNN, self).__init__()
@@ -34,15 +31,7 @@ class RNN(pl.LightningModule):
         self.action_dim = action_dim
         self.dropout = dropout
         self.test = test
-        self.train_on_last_pred_only = train_on_last_pred_only
-        self.separate_context_and_query = separate_context_and_query
-        self.query_at_end = query_at_end
         self.optimizer_config = optimizer_config = optimizer_config
-
-        if separate_context_and_query and not query_at_end:
-            raise ValueError("query_at_end must be True if separate_context_and_query is True.")
-        if not train_on_last_pred_only and query_at_end and not separate_context_and_query:
-            raise NotImplementedError("Training at multiple steps is not supported if query_at_end is True.")
 
         print(f"LSTM Dropout: {self.dropout}")
         self.rnn = torch.nn.LSTM(
@@ -55,64 +44,41 @@ class RNN(pl.LightningModule):
         self.embed_transition = nn.Linear(
             2 * self.state_dim + self.action_dim + 1, self.n_embd)
         self.loss_fn = nn.CrossEntropyLoss(reduction='sum')
-        if self.separate_context_and_query:
-            self.pred_actions = nn.Sequential(
-                nn.Linear(2*self.n_embd, self.n_embd),
-                nn.ReLU(),
-                nn.Linear(self.n_embd, self.n_embd//2),
-                nn.ReLU(),
-                nn.Linear(self.n_embd//2, self.action_dim),
-                )
-        else:
-            self.pred_actions = nn.Linear(self.n_embd, self.action_dim)
+        self.pred_actions = nn.Linear(self.n_embd, self.action_dim)
 
     def forward(self, x):
         query_states = x['query_states'][:, None, :]
         zeros = x['zeros'][:, None, :]
 
-        if self.separate_context_and_query:
-            state_seq = x['context_states']
-            action_seq = x['context_actions']
-            next_state_seq = x['context_next_states']
-            reward_seq = x['context_rewards']
-        elif self.query_at_end:
-            state_seq = torch.cat([x['context_states'], query_states], dim=1)
-            action_seq = torch.cat(
-                [x['context_actions'], zeros[:, :, :self.action_dim]], dim=1)
-            next_state_seq = torch.cat(
-                [x['context_next_states'], zeros[:, :, :self.state_dim]], dim=1)
-            reward_seq = torch.cat([x['context_rewards'], zeros[:, :, :1]], dim=1)
-        else:
-            state_seq = torch.cat([query_states, x['context_states']], dim=1)
-            action_seq = torch.cat(
-                [zeros[:, :, :self.action_dim], x['context_actions']], dim=1)
-            next_state_seq = torch.cat(
-                [zeros[:, :, :self.state_dim], x['context_next_states']], dim=1)
-            reward_seq = torch.cat([zeros[:, :, :1], x['context_rewards']], dim=1)
-
+        # Prepare context sequence
+        state_seq = x['context_states']
+        action_seq = x['context_actions']
+        next_state_seq = x['context_next_states']
+        reward_seq = x['context_rewards']
         seq = torch.cat(
             [state_seq, action_seq, next_state_seq, reward_seq], dim=2)
         stacked_inputs = self.embed_transition(seq)
-        rnn_outputs, _ = self.rnn(stacked_inputs)  # (batch, seq_len, hidden_size)
-        if self.separate_context_and_query:
-            query = torch.cat([query_states, zeros[:,:,:self.action_dim+self.state_dim+1]], dim=2)
-            query = self.embed_transition(query)
-            query = query.repeat(1, rnn_outputs.shape[1], 1)
-            rnn_outputs_and_query = torch.cat([rnn_outputs, query], dim=2)
-            preds = self.pred_actions(rnn_outputs_and_query)
-        else:
-            preds = self.pred_actions(rnn_outputs)
+        _, seq_len, _ = stacked_inputs.shape
+
+        # Prepare query
+        query = torch.cat([query_states, zeros[:,:,:self.action_dim+self.state_dim+1]], dim=2)
+        query = self.embed_transition(query)
+        query_every = 10 if seq_len < 1000 else 20
+
+        # Run through RNN
+        rnn_hidden = None
+        pred_list = []
+        for i in range(seq_len):
+            rnn_outputs, rnn_hidden = self.rnn(stacked_inputs[:, i:i+1, :], rnn_hidden)
+            if i % query_every == 0 or i == seq_len - 1:
+                rnn_query_output, _ = self.rnn(query, rnn_hidden)
+                pred_output = self.pred_actions(rnn_query_output)
+                pred_list.append(pred_output)
+        preds = torch.cat(pred_list, dim=1)  # Should be (batch, seq_len, action_dim)
 
         if self.test:
             return preds[:, -1, :]
-        if self.train_on_last_pred_only:
-            indices = torch.tensor([preds.shape[1] - 1]).to(preds.device)
-        else:
-            indices = torch.cat([
-                torch.tensor([0]), torch.arange(10, preds.shape[1], 10)]
-            ).to(preds.device)
-        preds_subset = torch.index_select(preds, 1, indices)
-        return preds_subset
+        return preds
 
     def batch_forward(self, batch, batch_idx):
         pred_actions = self(batch)

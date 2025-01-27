@@ -1,8 +1,5 @@
 _target_: src.models.rnn.RNN
-name: rnn
+name: rnn_endquery
 n_embd: 1024
 n_layer: 3
 dropout: 0.5
-train_on_last_pred_only: False
-separate_context_and_query: False #True
-query_at_end: False #True
