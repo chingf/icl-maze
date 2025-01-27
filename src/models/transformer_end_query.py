@@ -104,7 +104,7 @@ class Transformer(pl.LightningModule):
             next_state_seq.append(x['context_next_states'][:, i, :].unsqueeze(1))
             reward_seq.append(x['context_rewards'][:, i, :].unsqueeze(1))
             query_locations.append(0)
-            if (i % query_every == 0) or (i == seq_len - 1) or (i == 0):
+            if (i % query_every == 0) or (i == seq_len - 1):
                 state_seq.append(query_states)
                 action_seq.append(zeros[:, :, :self.action_dim])
                 next_state_seq.append(zeros[:, :, :self.state_dim])
