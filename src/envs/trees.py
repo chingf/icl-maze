@@ -158,10 +158,13 @@ class TreeEnv(BaseEnv):
         goal = np.random.choice(self.leaves).encoding()
         return np.array(goal)
     
-    def sample_state(self):
-        valid_states = list(self.node_map.keys())
-        state = valid_states[np.random.choice(len(valid_states))]
-        return np.array(state)
+    def sample_state(self, from_origin=False):
+        if from_origin:
+            return np.array(list(self.root.encoding_vector))
+        else:
+            valid_states = list(self.node_map.keys())
+            state = valid_states[np.random.choice(len(valid_states))]
+            return np.array(state)
 
     def sample_action(self):
         i = np.random.randint(0, self.action_dim)
