@@ -43,7 +43,10 @@ def main(cfg: DictConfig):
     # Directory path handling
     env_name = build_env_name(env_config)
     model_name = build_model_name(model_config, optimizer_config)
-    dataset_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/datasets'
+    if cfg.override_dataset_dir is not None:
+        dataset_storage_dir = f'{cfg.override_dataset_dir}/{env_name}'
+    else:
+        dataset_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/datasets'
     model_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/models/{model_name}'
     # Check if train dataset is pickle or h5 format
     use_h5 = os.path.exists(os.path.join(dataset_storage_dir, 'train.h5'))
