@@ -5,15 +5,25 @@ defaults:
   - _self_
 
 wandb:
-  project: lazyload
+  project: 7layer #lazyload
+
+model:
+  dropout: 0
+
+env:
+  n_envs: 300000
+
+#optimizer:
+#  lr: 1e-5
+#  batch_size: 256
 
 seed: 0
-epoch: best
-n_eval_envs: 50 # (~per-mouse, each environment contains a different interaction history)
+epoch: -1 #best
+n_eval_envs: 25 #50 # (~per-mouse, each environment contains a different interaction history)
 test_horizon: 400  # (horizon for each evaluation episode)
 
 # Eval-specific parameters
-offline_eval_episodes: 15 # (per environment)  # TODO
+offline_eval_episodes: 5 #15 # (per environment)  # TODO
 online_eps_in_context: 1 # (number of episodes to keep in context)
 online_eval_episodes: 40 # (number of sequential episodes to run)
 

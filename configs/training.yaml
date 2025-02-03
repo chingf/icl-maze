@@ -4,9 +4,21 @@ defaults:
   - optimizer: default
   - _self_
 
+model:
+  dropout: 0
+  n_layer: 2
+  n_embd: 1024
+
+optimizer:
+  lr: 1e-5
+
+env:
+  n_envs: 300000
+  branching_prob: 0.85
+
 wandb:
-  project: lazyload
+  project: bprob0.85 #lazyload
 
 seed: 0
 storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
-#storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze
+override_dataset_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/datasets

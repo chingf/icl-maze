@@ -7,12 +7,11 @@ defaults:
 wandb:
   project: dqn_full
 
-n_eval_envs: 50 # (~per-mouse, each environment contains a different interaction history)
+n_eval_envs: 10 #50 # (~per-mouse, each environment contains a different interaction history)
 test_horizon: 400  # (horizon for each evaluation episode)
-n_eval_episodes: 40 # (per environment)
+n_eval_episodes: 1 #40 # (per environment)
 storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
-#storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze
 
-override_eval_dataset_path: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/lazyload/tree_layers7_bprob1.0_envs600000_H1600_explore/datasets/eval.h5
+override_eval_dataset_path: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/datasets/tree_layers7_bprob1.0_envs600000_H1600_explore/eval.h5
 override_params:
   - branching_prob: 1.

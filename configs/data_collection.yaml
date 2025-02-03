@@ -2,6 +2,10 @@ defaults:
   - env: tree
   - _self_
 
+env:
+  n_envs: 300000
+  branching_prob: 0.85
+
 from_origin: False
 
 wandb:
