@@ -19,7 +19,7 @@ from src.utils import (
 )
 
 
-def generate_history(env, rollin_type):
+def generate_history(env, rollin_type, from_origin):
     """ Makes a trajectory from an environment. """
     states = []
     actions = []
@@ -57,7 +57,7 @@ def generate_history(env, rollin_type):
 
     return states, actions, next_states, rewards
 
-def generate_multiple_histories(env_class, env_configs, rollin_type):
+def generate_multiple_histories(env_class, env_configs, rollin_type, from_origin):
     """ Makes a list of trajectories from a list of environments. """
     trajs = []
     for env_config in env_configs:
@@ -67,7 +67,7 @@ def generate_multiple_histories(env_class, env_configs, rollin_type):
             context_actions,
             context_next_states,
             context_rewards,
-        ) = generate_history(env, rollin_type)
+        ) = generate_history(env, rollin_type, from_origin)
         query_state = env.sample_state()
         optimal_action = env.opt_action(query_state)
         traj = {
