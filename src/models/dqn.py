@@ -61,8 +61,18 @@ class DQN(nn.Module):
     def get_buffer_size(self):
         return len(self.memory)
 
-    def forward(self, state):
-        return self.q_network(state)
+    def forward(self, state, return_activations=False):
+        if not return_activations:
+            return self.q_network(state)
+        else:
+            activations = []
+            x = state
+            n_ops = len(self.q_network)
+            for i, layer in enumerate(self.q_network):
+                x = layer(x)
+                if isinstance(layer, nn.ReLU):
+                    activations.append(x.detach().cpu().numpy())
+            return x, activations
 
     def select_action(self, state, greedy=False):
         sample = random.random() if not greedy else 1
