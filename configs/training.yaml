@@ -6,19 +6,17 @@ defaults:
 
 model:
   dropout: 0
-  n_layer: 2
-  n_embd: 1024
+  n_layer: 3
 
 optimizer:
-  lr: 1e-5
+  lr: 1e-6
 
 env:
   n_envs: 300000
-  branching_prob: 0.85
 
 wandb:
-  project: bprob0.85 #lazyload
+  project: random_tree
 
 seed: 0
 storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
-override_dataset_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/datasets
+override_dataset_dir: null #/n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/datasets

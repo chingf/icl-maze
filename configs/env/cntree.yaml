@@ -1,0 +1,10 @@
+env: cntree
+n_envs: 300000
+horizon: 800
+max_layers: 7
+branching_prob: 0.9
+node_encoding_corr: 0.5
+state_dim: 10
+action_dim: 4
+store_gpu: False
+rollin_type: explore

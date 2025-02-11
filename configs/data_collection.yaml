@@ -1,15 +1,15 @@
 defaults:
-  - env: tree
+  - env: cntree #tree
   - _self_
 
-env:
-  n_envs: 300000
-  branching_prob: 0.85
+#env:
+#  n_envs: 300000 #1000
+#  branching_prob: 0.9 #1.0
+#  horizon: 800 #1600
 
-from_origin: False
+from_origin: True
 
 wandb:
-  project: lazyload
+  project: cntree
 
 storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
-#storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze

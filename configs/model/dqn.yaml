@@ -2,5 +2,5 @@ _target_: src.models.dqn.DQN
 name: dqn
 n_layers: 4
 gamma: 0.9
-epsilon: 0
+action_temp: 1.0
 target_update: 10
