@@ -11,3 +11,5 @@ wandb
 *.pt
 *.pyc
 .vscode/
+*.png
+*.pkl

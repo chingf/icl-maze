@@ -60,6 +60,8 @@ class TreeEnv(BaseEnv):
             self.node_encoding_bank = np.random.randint(
                 2, size=(max_samples_needed*2, self.state_dim)).astype(np.float32)
             self.node_encoding_bank = np.unique(self.node_encoding_bank, axis=0)
+            self.node_encoding_bank = self.node_encoding_bank[~np.all(self.node_encoding_bank == 0, axis=1)]
+            np.random.shuffle(self.node_encoding_bank)
             self.node_encoding_bank_idx = 0
             if self.node_encoding_bank.shape[0] < max_samples_needed:
                 raise ValueError("Failed to generate enough unique node encodings")
@@ -182,7 +184,7 @@ class TreeEnv(BaseEnv):
             attempts = 0
             while True:
                 state = self.sample_state()
-                if self.dist_from_goal[tuple(state.tolist())] >= 1.5*(self.max_layers - 1):
+                if self.dist_from_goal[tuple(state.tolist())] >= 0.5*(self.max_layers - 1):  # TODO: switch back to 1.5
                     s = state.tolist()
                     if (forbidden_states is not None) and (s not in forbidden_states):
                         break
@@ -451,3 +453,47 @@ class TreeEnvVec(BaseEnv):
             return obs, acts, next_obs, rews, max_rewards
         else:
             return obs, acts, next_obs, rews
+        
+if __name__ == '__main__':
+    def make_new_tree():
+        return TreeEnv(
+            max_layers=7,
+            branching_prob=1.0,
+            horizon=800,
+            node_encoding='random',
+        )
+
+    tree = make_new_tree()
+
+    import pickle
+    import os
+    abs_path = '/n/home04/cfang/Code/icl-maze/src/envs/'
+    dist_mat = pickle.load(open(
+        os.path.join(abs_path, f'depth{tree.max_layers}_distance_matrix.pkl'), 'rb'
+        ))
+    ordered_encodings = [np.nan*np.ones(tree.state_dim) for _ in range(dist_mat.shape[0])]
+    idxs = []
+    for encoding in tree.node_map:
+        node = tree.node_map[encoding]
+        layer = node.layer
+        pos = node.pos
+        if layer == pos == 0:
+            idx = 0
+        else:
+            idx = (2**layer)-1 + pos
+        ordered_encodings[idx] = np.array(encoding)
+        idxs.append(idx)
+    print(idxs)
+    ordered_encodings = np.array(ordered_encodings)
+    CC = np.corrcoef(ordered_encodings)
+
+    import matplotlib.pyplot as plt
+    plt.imshow(CC, cmap='jet')
+    plt.colorbar()
+    plt.savefig('cc.png')
+    plt.show()
+
+    plt.imshow(-dist_mat, cmap='jet')
+    plt.colorbar()
+    plt.savefig('dist_mat.png')
+    plt.show()
