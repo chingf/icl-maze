@@ -57,31 +57,38 @@ def generate_history(env, rollin_type, from_origin):
 
     return states, actions, next_states, rewards
 
+from multiprocessing import Pool
+
+def process_single_env(args):
+    """Helper function to process a single environment config for multiprocessing."""
+    env_class, env_config, rollin_type, from_origin = args
+    env = env_class(**env_config)
+    context_states, context_actions, context_next_states, context_rewards = generate_history(
+        env, rollin_type, from_origin
+    )
+    query_state = env.sample_state()
+    optimal_action = env.opt_action(query_state)
+    traj = {
+        'query_state': query_state,
+        'optimal_action': optimal_action,
+        'context_states': context_states,
+        'context_actions': context_actions,
+        'context_next_states': context_next_states,
+        'context_rewards': context_rewards,
+        'goal': env.goal,
+    }
+    if isinstance(env, TreeEnv):
+        traj['initialization_seed'] = env.initialization_seed
+    return traj
+
 def generate_multiple_histories(env_class, env_configs, rollin_type, from_origin):
-    """ Makes a list of trajectories from a list of environments. """
-    trajs = []
-    for env_config in env_configs:
-        env = env_class(**env_config)
-        (
-            context_states,
-            context_actions,
-            context_next_states,
-            context_rewards,
-        ) = generate_history(env, rollin_type, from_origin)
-        query_state = env.sample_state()
-        optimal_action = env.opt_action(query_state)
-        traj = {
-            'query_state': query_state,
-            'optimal_action': optimal_action,
-            'context_states': context_states,
-            'context_actions': context_actions,
-            'context_next_states': context_next_states,
-            'context_rewards': context_rewards,
-            'goal': env.goal,
-        }
-        if isinstance(env, TreeEnv):
-            traj['initialization_seed'] = env.initialization_seed
-        trajs.append(traj)
+    """Makes a list of trajectories from a list of environments using parallel processing."""
+    args = [(env_class, env_config, rollin_type, from_origin) for env_config in env_configs]
+
+    #with Pool(processes=n_processes) as pool: 
+    with Pool() as pool:
+        trajs = pool.map(process_single_env, args)
+    
     return trajs
 
 def package_env_configs(base_env_config, base_env_config_keys, new_config_vals, new_config_keys):
@@ -133,7 +140,7 @@ def main(cfg: DictConfig):
             env_config, ['dim', 'horizon'], [np.repeat(eval_goals, n_repeats, axis=0)], ['goal'])
         EnvClass = DarkroomEnv
 
-    elif (env_config['env'].contains('tree')) and (env_config['branching_prob'] == 1.):
+    elif ('tree' in env_config['env']) and (env_config['branching_prob'] == 1.):
         layers = env_config['max_layers']
         n_envs = env_config['n_envs']
         goals = [(layers-1, p) for p in range(2**(layers-1))]
@@ -149,12 +156,12 @@ def main(cfg: DictConfig):
         if env_config['env'] == 'tree':
             EnvClass = TreeEnv
             env_config_keys = [
-                'max_layers', 'initialization_seed', 'horizon',
+                'max_layers', 'horizon',
                 'branching_prob', 'node_encoding']
         elif env_config['env'] == 'cntree':
             EnvClass = CnTreeEnv
             env_config_keys = [
-                'max_layers', 'initialization_seed', 'horizon',
+                'max_layers', 'horizon',
                 'branching_prob', 'node_encoding_corr', 'state_dim']
 
         train_env_configs = package_env_configs(
@@ -170,7 +177,7 @@ def main(cfg: DictConfig):
             [np.tile(eval_goals, (n_repeats, 1)), np.arange(n_repeats*len(eval_goals))],
             ['goal', 'initialization_seed'])
 
-    elif (env_config['env'].contains('tree')) and (env_config['branching_prob'] != 1.):
+    elif ('tree' in env_config['env']) and (env_config['branching_prob'] != 1.):
         unique_seeds_path = dataset_storage_dir + '/unique_seeds.pkl'
         n_envs = env_config['n_envs']
         with open(unique_seeds_path, 'rb') as f:
@@ -185,33 +192,32 @@ def main(cfg: DictConfig):
         if env_config['env'] == 'tree':
             EnvClass = TreeEnv
             env_config_keys = [
-                'max_layers', 'initialization_seed', 'horizon',
+                'max_layers', 'horizon',
                 'branching_prob', 'node_encoding']
         elif env_config['env'] == 'cntree':
             EnvClass = CnTreeEnv
             env_config_keys = [
-                'max_layers', 'initialization_seed', 'horizon',
+                'max_layers', 'horizon',
                 'branching_prob', 'node_encoding_corr', 'state_dim']
 
         train_env_configs = package_env_configs(
             env_config, env_config_keys,
-            [np.tile(train_seeds, (n_repeats, 1))],
+            [np.tile(train_seeds, (n_repeats))],
             ['initialization_seed'])
         test_env_configs = package_env_configs(
             env_config, env_config_keys,
-            [np.tile(test_seeds, (n_repeats, 1))],
+            [np.tile(test_seeds, (n_repeats))],
             ['initialization_seed'])
         eval_env_configs = package_env_configs(
             env_config, env_config_keys,
-            [np.tile(eval_seeds, (n_repeats, 1))],
+            [np.tile(eval_seeds, (n_repeats))],
             ['initialization_seed'])
 
     else:
         raise NotImplementedError
     
-
     train_trajs = generate_multiple_histories(EnvClass, train_env_configs, rollin_type, from_origin)
-    print('Generated train trajectories.')
+    print(f'Generated {len(train_trajs)} train trajectories.')
     train_filepath = os.path.join(dataset_storage_dir, build_dataset_name(0))
     with open(train_filepath, 'wb') as file:
         pickle.dump(train_trajs, file)
@@ -219,7 +225,7 @@ def main(cfg: DictConfig):
     del train_trajs
 
     test_trajs = generate_multiple_histories(EnvClass, test_env_configs, rollin_type, from_origin)
-    print('Generated test trajectories.')
+    print(f'Generated {len(test_trajs)} test trajectories.')
     test_filepath = os.path.join(dataset_storage_dir, build_dataset_name(1))
     with open(test_filepath, 'wb') as file:
         pickle.dump(test_trajs, file)
@@ -227,7 +233,7 @@ def main(cfg: DictConfig):
     del test_trajs
 
     eval_trajs = generate_multiple_histories(EnvClass, eval_env_configs, rollin_type, from_origin)
-    print('Generated eval trajectories.')
+    print(f'Generated {len(eval_trajs)} eval trajectories.')
     eval_filepath = os.path.join(dataset_storage_dir, build_dataset_name(2))
     with open(eval_filepath, 'wb') as file:
         pickle.dump(eval_trajs, file)
