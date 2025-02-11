@@ -11,8 +11,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class CnTreeEnv(TreeEnv):
     def __init__(
-        self, max_layers, branching_prob, horizon,
-        initialization_seed=None, goal=None, node_encoding_corr=0, state_dim=256
+        self, max_layers, branching_prob, horizon, state_dim, node_encoding_corr,
+        initialization_seed=None, goal=None
         ):
         """
         Args:

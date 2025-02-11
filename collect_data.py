@@ -11,7 +11,6 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 
 from src.envs.darkroom_env import DarkroomEnv
-from src.envs.maze_env import MazeEnv
 from src.envs.trees import TreeEnv
 from src.envs.cntrees import CnTreeEnv
 from src.utils import (
@@ -85,6 +84,21 @@ def generate_multiple_histories(env_class, env_configs, rollin_type, from_origin
         trajs.append(traj)
     return trajs
 
+def package_env_configs(base_env_config, base_env_config_keys, new_config_vals, new_config_keys):
+    """
+    Packages a base environment configuration with new values for certain keys.
+    """
+    config_list = []
+    n_configs = len(new_config_vals[0])
+    for i in range(n_configs):
+        config = {}
+        for key in base_env_config_keys:
+            config[key] = base_env_config[key]
+        for key, val in zip(new_config_keys, new_config_vals):
+            config[key] = val[i]
+        config_list.append(config)
+    return config_list
+
 
 @hydra.main(version_base=None, config_path="configs", config_name="data_collection")
 def main(cfg: DictConfig):
@@ -111,56 +125,15 @@ def main(cfg: DictConfig):
         test_goals = goals[split_idx_1:split_idx_2]
         eval_goals = goals[split_idx_2:]
 
-        env_configs = [{
-            'dim': env_config['dim'], 'goal': goal, 'horizon': env_config['horizon']
-            } for goal in np.repeat(train_goals, n_repeats, axis=0)]
-        train_trajs = generate_multiple_histories(DarkroomEnv, env_configs, rollin_type, from_origin)
-        print('Generated train trajectories.')
+        train_env_configs = package_env_configs(
+            env_config, ['dim', 'horizon'], [np.repeat(train_goals, n_repeats, axis=0)], ['goal'])
+        test_env_configs = package_env_configs(
+            env_config, ['dim', 'horizon'], [np.repeat(test_goals, n_repeats, axis=0)], ['goal'])
+        eval_env_configs = package_env_configs(
+            env_config, ['dim', 'horizon'], [np.repeat(eval_goals, n_repeats, axis=0)], ['goal'])
+        EnvClass = DarkroomEnv
 
-        env_configs = [{
-            'dim': env_config['dim'], 'goal': goal, 'horizon': env_config['horizon']
-            } for goal in np.repeat(test_goals, n_repeats, axis=0)]
-        test_trajs = generate_multiple_histories(DarkroomEnv, env_configs, rollin_type, from_origin)
-        print('Generated test trajectories.')
-
-        env_configs = [{
-            'dim': env_config['dim'], 'goal': goal, 'horizon': env_config['horizon']
-            } for goal in np.repeat(eval_goals, n_repeats, axis=0)]
-        eval_trajs = generate_multiple_histories(DarkroomEnv, env_configs, rollin_type, from_origin)
-        print('Generated eval trajectories.')
-
-    elif env_config['env'] == 'maze':
-        layers = env_config['layers']
-        goals = [(layers-1, p) for p in range(2**(layers-1))]
-        n_envs = env_config['n_envs']
-        n_repeats = n_envs // (len(goals))
-
-        np.random.RandomState(seed=0).shuffle(goals)
-        split_idx_1 = int(.8 * len(goals))
-        split_idx_2 = int(.9 * len(goals))
-        train_goals = goals[:split_idx_1]
-        test_goals = goals[split_idx_1:split_idx_2]
-        eval_goals = goals[split_idx_2:]
-
-        env_configs = [{
-            'layers': env_config['layers'], 'goal': goal, 'horizon': env_config['horizon']
-            } for goal in np.tile(train_goals, (n_repeats, 1))]
-        train_trajs = generate_multiple_histories(MazeEnv, env_configs, rollin_type, from_origin)
-        print('Generated train trajectories.')
-
-        env_configs = [{
-            'layers': env_config['layers'], 'goal': goal, 'horizon': env_config['horizon']
-            } for goal in np.tile(test_goals, (n_repeats, 1))]
-        test_trajs = generate_multiple_histories(MazeEnv, env_configs, rollin_type, from_origin)
-        print('Generated test trajectories.')
-
-        env_configs = [{
-            'layers': env_config['layers'], 'goal': goal, 'horizon': env_config['horizon']
-            } for goal in np.tile(eval_goals, (n_repeats, 1))]
-        eval_trajs = generate_multiple_histories(MazeEnv, env_configs, rollin_type, from_origin)
-        print('Generated eval trajectories.')
-
-    elif (env_config['env'] == 'tree') and (env_config['branching_prob'] == 1.):
+    elif (env_config['env'].contains('tree')) and (env_config['branching_prob'] == 1.):
         layers = env_config['max_layers']
         n_envs = env_config['n_envs']
         goals = [(layers-1, p) for p in range(2**(layers-1))]
@@ -173,40 +146,31 @@ def main(cfg: DictConfig):
         test_goals = goals[split_idx_1:split_idx_2]
         eval_goals = goals[split_idx_2:]
 
-        env_configs = [{
-            'max_layers': env_config['max_layers'],
-            'initialization_seed': i,
-            'horizon': env_config['horizon'],
-            'branching_prob': env_config['branching_prob'],
-            'node_encoding': env_config['node_encoding'],
-            'goal': goal
-            } for i, goal in enumerate(np.tile(train_goals, (n_repeats, 1)))]
-        train_trajs = generate_multiple_histories(TreeEnv, env_configs, rollin_type, from_origin)
-        print('Generated train trajectories.')
+        if env_config['env'] == 'tree':
+            EnvClass = TreeEnv
+            env_config_keys = [
+                'max_layers', 'initialization_seed', 'horizon',
+                'branching_prob', 'node_encoding']
+        elif env_config['env'] == 'cntree':
+            EnvClass = CnTreeEnv
+            env_config_keys = [
+                'max_layers', 'initialization_seed', 'horizon',
+                'branching_prob', 'node_encoding_corr', 'state_dim']
 
-        env_configs = [{
-            'max_layers': env_config['max_layers'],
-            'initialization_seed': i,
-            'horizon': env_config['horizon'],
-            'branching_prob': env_config['branching_prob'],
-            'node_encoding': env_config['node_encoding'],
-            'goal': goal
-            } for i, goal in enumerate(np.tile(test_goals, (n_repeats, 1)))]
-        test_trajs = generate_multiple_histories(TreeEnv, env_configs, rollin_type, from_origin)
-        print('Generated test trajectories.')
+        train_env_configs = package_env_configs(
+            env_config, env_config_keys,
+            [np.tile(train_goals, (n_repeats, 1)), np.arange(n_repeats*len(train_goals))],
+            ['goal', 'initialization_seed'])
+        test_env_configs = package_env_configs(
+            env_config, env_config_keys,
+            [np.tile(test_goals, (n_repeats, 1)), np.arange(n_repeats*len(test_goals))],
+            ['goal', 'initialization_seed'])
+        eval_env_configs = package_env_configs(
+            env_config, env_config_keys,
+            [np.tile(eval_goals, (n_repeats, 1)), np.arange(n_repeats*len(eval_goals))],
+            ['goal', 'initialization_seed'])
 
-        env_configs = [{
-            'max_layers': env_config['max_layers'],
-            'initialization_seed': i,
-            'horizon': env_config['horizon'],
-            'branching_prob': env_config['branching_prob'],
-            'node_encoding': env_config['node_encoding'],
-            'goal': goal
-            } for i, goal in enumerate(np.tile(eval_goals, (n_repeats, 1)))]
-        eval_trajs = generate_multiple_histories(TreeEnv, env_configs, rollin_type, from_origin)
-        print('Generated eval trajectories.')
-
-    elif (env_config['env'] == 'tree') and (env_config['branching_prob'] != 1.):
+    elif (env_config['env'].contains('tree')) and (env_config['branching_prob'] != 1.):
         unique_seeds_path = dataset_storage_dir + '/unique_seeds.pkl'
         n_envs = env_config['n_envs']
         with open(unique_seeds_path, 'rb') as f:
@@ -218,143 +182,57 @@ def main(cfg: DictConfig):
         n_repeats = max(n_envs // n_unique_seeds, 1)
         print(f"n_repeats: {n_repeats}")
 
-        env_configs = [{
-            'max_layers': env_config['max_layers'],
-            'initialization_seed': s,
-            'horizon': env_config['horizon'],
-            'branching_prob': env_config['branching_prob'],
-            'node_encoding': env_config['node_encoding']
-            } for s in np.tile(train_seeds, (n_repeats))]
-        train_trajs = generate_multiple_histories(TreeEnv, env_configs, rollin_type, from_origin)
-        print('Generated train trajectories.')
+        if env_config['env'] == 'tree':
+            EnvClass = TreeEnv
+            env_config_keys = [
+                'max_layers', 'initialization_seed', 'horizon',
+                'branching_prob', 'node_encoding']
+        elif env_config['env'] == 'cntree':
+            EnvClass = CnTreeEnv
+            env_config_keys = [
+                'max_layers', 'initialization_seed', 'horizon',
+                'branching_prob', 'node_encoding_corr', 'state_dim']
 
-        env_configs = [{
-            'max_layers': env_config['max_layers'],
-            'initialization_seed': s,
-            'horizon': env_config['horizon'],
-            'branching_prob': env_config['branching_prob'],
-            'node_encoding': env_config['node_encoding']
-            } for s in np.tile(test_seeds, (n_repeats))]
-        test_trajs = generate_multiple_histories(TreeEnv, env_configs, rollin_type, from_origin)
-        print('Generated test trajectories.')
-
-        env_configs = [{
-            'max_layers': env_config['max_layers'],
-            'initialization_seed': s,
-            'horizon': env_config['horizon'],
-            'branching_prob': env_config['branching_prob'],
-            'node_encoding': env_config['node_encoding']
-            } for s in np.tile(eval_seeds, (n_repeats))]
-        eval_trajs = generate_multiple_histories(TreeEnv, env_configs, rollin_type, from_origin)
-        print('Generated eval trajectories.')
-
-    elif (env_config['env'] == 'cntree') and (env_config['branching_prob'] == 1.):
-        layers = env_config['max_layers']
-        n_envs = env_config['n_envs']
-        goals = [(layers-1, p) for p in range(2**(layers-1))]
-        n_repeats = n_envs // (len(goals))
-
-        np.random.RandomState(seed=0).shuffle(goals)
-        split_idx_1 = int(.8 * len(goals))
-        split_idx_2 = int(.9 * len(goals))
-        train_goals = goals[:split_idx_1]
-        test_goals = goals[split_idx_1:split_idx_2]
-        eval_goals = goals[split_idx_2:]
-
-        env_configs = [{
-            'max_layers': env_config['max_layers'],
-            'initialization_seed': i,
-            'horizon': env_config['horizon'],
-            'branching_prob': env_config['branching_prob'],
-            'node_encoding_corr': env_config['node_encoding_corr'],
-            'goal': goal
-            } for i, goal in enumerate(np.tile(train_goals, (n_repeats, 1)))]
-        train_trajs = generate_multiple_histories(CnTreeEnv, env_configs, rollin_type, from_origin)
-        print('Generated train trajectories.')
-
-        env_configs = [{
-            'max_layers': env_config['max_layers'],
-            'initialization_seed': i,
-            'horizon': env_config['horizon'],
-            'branching_prob': env_config['branching_prob'],
-            'node_encoding_corr': env_config['node_encoding_corr'],
-            'goal': goal
-            } for i, goal in enumerate(np.tile(test_goals, (n_repeats, 1)))]
-        test_trajs = generate_multiple_histories(CnTreeEnv, env_configs, rollin_type, from_origin)
-        print('Generated test trajectories.')
-
-        env_configs = [{
-            'max_layers': env_config['max_layers'],
-            'initialization_seed': i,
-            'horizon': env_config['horizon'],
-            'branching_prob': env_config['branching_prob'],
-            'node_encoding_corr': env_config['node_encoding_corr'],
-            'goal': goal
-            } for i, goal in enumerate(np.tile(eval_goals, (n_repeats, 1)))]
-        eval_trajs = generate_multiple_histories(CnTreeEnv, env_configs, rollin_type, from_origin)
-        print('Generated eval trajectories.')
-
-    elif (env_config['env'] == 'cntree') and (env_config['branching_prob'] != 1.):
-        unique_seeds_path = dataset_storage_dir + '/unique_seeds.pkl'
-        n_envs = env_config['n_envs']
-        with open(unique_seeds_path, 'rb') as f:
-            unique_seeds = pickle.load(f)
-        train_seeds = unique_seeds['train']
-        test_seeds = unique_seeds['test']
-        eval_seeds = unique_seeds['eval']
-        n_unique_seeds = len(train_seeds) + len(test_seeds) + len(eval_seeds)
-        n_repeats = max(n_envs // n_unique_seeds, 1)
-        print(f"n_repeats: {n_repeats}")
-
-        env_configs = [{
-            'max_layers': env_config['max_layers'],
-            'initialization_seed': s,
-            'horizon': env_config['horizon'],
-            'branching_prob': env_config['branching_prob'],
-            'node_encoding_corr': env_config['node_encoding_corr']
-            } for s in np.tile(train_seeds, (n_repeats))]
-        train_trajs = generate_multiple_histories(CnTreeEnv, env_configs, rollin_type, from_origin)
-        print('Generated train trajectories.')
-
-        env_configs = [{
-            'max_layers': env_config['max_layers'],
-            'initialization_seed': s,
-            'horizon': env_config['horizon'],
-            'branching_prob': env_config['branching_prob'],
-            'node_encoding_corr': env_config['node_encoding_corr']
-            } for s in np.tile(test_seeds, (n_repeats))]
-        test_trajs = generate_multiple_histories(CnTreeEnv, env_configs, rollin_type, from_origin)
-        print('Generated test trajectories.')
-
-        env_configs = [{
-            'max_layers': env_config['max_layers'],
-            'initialization_seed': s,
-            'horizon': env_config['horizon'],
-            'branching_prob': env_config['branching_prob'],
-            'node_encoding_corr': env_config['node_encoding_corr']
-            } for s in np.tile(eval_seeds, (n_repeats))]
-        eval_trajs = generate_multiple_histories(CnTreeEnv, env_configs, rollin_type, from_origin)
-        print('Generated eval trajectories.')
-
+        train_env_configs = package_env_configs(
+            env_config, env_config_keys,
+            [np.tile(train_seeds, (n_repeats, 1))],
+            ['initialization_seed'])
+        test_env_configs = package_env_configs(
+            env_config, env_config_keys,
+            [np.tile(test_seeds, (n_repeats, 1))],
+            ['initialization_seed'])
+        eval_env_configs = package_env_configs(
+            env_config, env_config_keys,
+            [np.tile(eval_seeds, (n_repeats, 1))],
+            ['initialization_seed'])
 
     else:
         raise NotImplementedError
     
 
+    train_trajs = generate_multiple_histories(EnvClass, train_env_configs, rollin_type, from_origin)
+    print('Generated train trajectories.')
     train_filepath = os.path.join(dataset_storage_dir, build_dataset_name(0))
     with open(train_filepath, 'wb') as file:
         pickle.dump(train_trajs, file)
         print(f"Saved to {train_filepath}.")
+    del train_trajs
 
+    test_trajs = generate_multiple_histories(EnvClass, test_env_configs, rollin_type, from_origin)
+    print('Generated test trajectories.')
     test_filepath = os.path.join(dataset_storage_dir, build_dataset_name(1))
     with open(test_filepath, 'wb') as file:
         pickle.dump(test_trajs, file)
         print(f"Saved to {test_filepath}.")
+    del test_trajs
 
+    eval_trajs = generate_multiple_histories(EnvClass, eval_env_configs, rollin_type, from_origin)
+    print('Generated eval trajectories.')
     eval_filepath = os.path.join(dataset_storage_dir, build_dataset_name(2))
     with open(eval_filepath, 'wb') as file:
         pickle.dump(eval_trajs, file)
         print(f"Saved to {eval_filepath}.")
+    del eval_trajs
 
 
 if __name__ == "__main__":

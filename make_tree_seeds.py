@@ -6,6 +6,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 
 from src.envs.trees import TreeEnv
+from src.envs.cntrees import CnTreeEnv
 from src.utils import (
     build_env_name,
     build_dataset_name,
@@ -15,7 +16,7 @@ from src.utils import (
 @hydra.main(version_base=None, config_path="configs", config_name="data_collection")
 def main(cfg: DictConfig):
     env_config = OmegaConf.to_container(cfg.env, resolve=True)
-    if env_config['env'] != 'tree':
+    if 'tree' not in env_config['env']:
         raise ValueError("This script is for trees only")
     if env_config['branching_prob'] == 1.:
         raise ValueError("This script is for trees with branch probability < 1")
@@ -32,19 +33,30 @@ def main(cfg: DictConfig):
         if seeds_found >= goal_total_seeds*1.5:
             break
         try:
-            env = TreeEnv(
-                max_layers=env_config['max_layers'],
-                initialization_seed=seed,
-                horizon=env_config['horizon'],
-                branching_prob=env_config['branching_prob'],
-                node_encoding=env_config['node_encoding'])
+            if env_config['env'] == 'cntree':
+                env = CnTreeEnv(
+                    max_layers=env_config['max_layers'],
+                    initialization_seed=seed,
+                    horizon=env_config['horizon'],
+                    branching_prob=env_config['branching_prob'],
+                    node_encoding_corr=env_config['node_encoding_corr'],
+                    state_dim=env_config['state_dim'])
+            else:
+                env = TreeEnv(
+                    max_layers=env_config['max_layers'],
+                    initialization_seed=seed,
+                    horizon=env_config['horizon'],
+                    branching_prob=env_config['branching_prob'],
+                    node_encoding=env_config['node_encoding'])
         except ValueError as e:
             if str(e) == "No leaves found in tree":
                 continue
             else:
                 raise e
         env_goal = tuple(env.goal.tolist())
-        env_struct = tuple(sorted(env.node_map.keys()))
+        env_struct = tuple(sorted(
+            [(env.node_map[k].layer, env.node_map[k].pos) for k in env.node_map.keys()]
+            ))
         if len(env.node_map.keys()) == (env.max_layers**2 - 1):
             continue  # Full trees will be saved separately
 
