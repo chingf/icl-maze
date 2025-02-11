@@ -116,25 +116,11 @@ def main(cfg: DictConfig):
     # Dataset shuffler callback
     shuffle_indices_callback = ShuffleIndicesCallback()
 
-    # Gradient clipping callback
-    class GradientNormLogger(Callback):
-        def on_after_backward(self, trainer, pl_module):
-            if trainer.global_step % 100 == 0:
-                # Calculate the gradient norm
-                total_norm = 0
-                for p in pl_module.parameters():
-                    if p.grad is not None:
-                        param_norm = p.grad.data.norm(2)
-                        total_norm += param_norm.item() ** 2
-                total_norm = total_norm ** 0.5
-                print(f'Gradient Norm: {total_norm}')
-
-
     # Set up trainer
     trainer = pl.Trainer(
         max_epochs=optimizer_config['num_epochs'],
         logger=wandb_logger,
-        callbacks=[checkpoint_callback, shuffle_indices_callback, GradientNormLogger()],
+        callbacks=[checkpoint_callback, shuffle_indices_callback],
         accelerator='auto',
         devices='auto',
         strategy='auto',
