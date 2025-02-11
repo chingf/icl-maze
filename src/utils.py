@@ -95,9 +95,16 @@ def build_env_name(env_config):
         env_filename += '_bprob' + str(env_config['branching_prob'])
         env_filename += '_H' + str(env_config['horizon'])
         env_filename += '_' + env_config['rollin_type']
-    elif env_filename == 'tree':
+    elif env_filename == 'tree' or env_filename == 'tree_origin':
         env_filename += '_layers' + str(env_config['max_layers'])
         env_filename += '_bprob' + str(env_config['branching_prob'])
+        env_filename += '_envs' + str(env_config['n_envs'])
+        env_filename += '_H' + str(env_config['horizon'])
+        env_filename += '_' + env_config['rollin_type']
+    elif env_filename == 'cntree':
+        env_filename += '_layers' + str(env_config['max_layers'])
+        env_filename += '_bprob' + str(env_config['branching_prob'])
+        env_filename += '_corr' + str(env_config['node_encoding_corr'])
         env_filename += '_envs' + str(env_config['n_envs'])
         env_filename += '_H' + str(env_config['horizon'])
         env_filename += '_' + env_config['rollin_type']
@@ -112,21 +119,18 @@ def build_model_name(model_config, optimizer_config):
         model_filename += '_lr' + str(optimizer_config['lr'])
         model_filename += '_drop' + str(model_config['dropout'])
         model_filename += '_batch' + str(optimizer_config['batch_size'])
-    elif model_filename == 'rnn':
+    elif 'rnn' in model_filename:
         model_filename += '_embd' + str(model_config['n_embd'])
         model_filename += '_layer' + str(model_config['n_layer'])
         model_filename += '_dropout' + str(model_config['dropout'])
         model_filename += '_lr' + str(optimizer_config['lr'])
         model_filename += '_batch' + str(optimizer_config['batch_size'])
-        if model_config['separate_context_and_query']:
-            model_filename += '_sep'
-        elif model_config['query_at_end']:
-            model_filename += '_endquery'
     elif model_filename == 'dqn':
         model_filename += '_nlayers' + str(model_config['n_layers'])
         model_filename += '_gamma' + str(model_config['gamma'])
         model_filename += '_target' + str(model_config['target_update'])
         model_filename += '_lr' + str(optimizer_config['lr'])
+        model_filename += '_temp' + str(model_config['action_temp'])
     return model_filename
 
 def build_dataset_name(mode):
