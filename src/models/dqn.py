@@ -19,7 +19,7 @@ class DQN(nn.Module):
         action_dim: int,
         n_layers: int,
         gamma: float,
-        epsilon: float,
+        action_temp: float,
         target_update: int,
         optimizer_config: dict,
         name: str,
@@ -31,7 +31,7 @@ class DQN(nn.Module):
         self.action_dim = action_dim
         self.n_layers = n_layers
         self.gamma = gamma
-        self.epsilon = epsilon
+        self.action_temp = action_temp
         self.buffer_size = buffer_size
         self.target_update = target_update
         self.memory = deque(maxlen=buffer_size)
@@ -74,28 +74,19 @@ class DQN(nn.Module):
                     activations.append(x.detach().cpu().numpy())
             return x, activations
 
-    def select_action(self, state, greedy=False):
-        sample = random.random() if not greedy else 1
-        if sample > self.epsilon:
-            with torch.no_grad():
-                return self.q_network(state).argmax().view(1, 1)
-        else:
-            random_action = random.randrange(self.action_dim)
-            return torch.tensor([[random_action]], device=self.device, dtype=torch.int64)
+    def select_action(self, state):
+        with torch.no_grad():
+            q_values = self.q_network(state)
+            probs = torch.softmax(q_values/self.action_temp, dim=-1)
+            action = torch.multinomial(probs, 1)
+        return action
         
-    def select_action_vec(self, states, greedy=False):
+    def select_action_vec(self, states):
         state_batch = torch.stack(states)
         with torch.no_grad():
-            actions = self.q_network(state_batch).argmax(dim=1)
-        if not greedy:
-            random_samples = torch.rand(len(states), device=self.device)
-            _actions = torch.zeros(len(states), dtype=torch.int64, device=self.device)
-            for i, sample in enumerate(random_samples):
-                if sample > self.epsilon:
-                    _actions[i] = actions[i]
-                else:
-                    _actions[i] = random.randrange(self.action_dim)
-            actions = _actions
+            q_values = self.q_network(state_batch)
+            probs = torch.softmax(q_values/self.action_temp, dim=-1)
+            actions = torch.multinomial(probs, 1).squeeze(-1)
         return actions
 
     def store_transition_from_dict(self, traj_dict):
@@ -159,7 +150,7 @@ class DQN(nn.Module):
             trajectory = []
             
             for t in range(horizon):
-                action = self.select_action(state, greedy=True)
+                action = self.select_action(state)
                 action_array = np.zeros(self.action_dim)
                 action_array[action.item()] = 1
                 next_state, reward, done, _ = env.step(action_array)
@@ -182,7 +173,7 @@ class DQN(nn.Module):
             
             with torch.no_grad():
                 for t in range(horizon):
-                    actions = self.select_action_vec(states, greedy=True)
+                    actions = self.select_action_vec(states)
                     for i, env in enumerate(envs):
                         action_array = np.zeros(self.action_dim)
                         action_array[actions[i]] = 1

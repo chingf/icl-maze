@@ -86,7 +86,7 @@ def main(cfg: DictConfig):
     env_config['initialization_seed'] = [
         np.array(eval_trajs[i_eval]['initialization_seed']).item() for i_eval in range(len(eval_trajs))]
     max_context_length = eval_trajs[0]['context_rewards'].shape[0]
-    max_context_length = min(max_context_length, 1200)
+    max_context_length = min(max_context_length, 1000)
     print(f'Max context length: {max_context_length}')
 
     # Fully offline evaluation of context length-dependency 
@@ -96,7 +96,7 @@ def main(cfg: DictConfig):
         'experienced_reward': [],
         'context_length': []
     }
-    context_lengths = np.linspace(0, max_context_length, 20, dtype=int)
+    context_lengths = np.linspace(0, max_context_length, 10, dtype=int)
     context_lengths[0] = 10
     context_lengths_to_visualize = [
         context_lengths[context_lengths.size//10],
@@ -106,10 +106,11 @@ def main(cfg: DictConfig):
     ]
     for context_length in context_lengths:
         log_and_visualize = context_length in context_lengths_to_visualize
+        _model_storage_dir = model_storage_dir if context_length == max_context_length else None
         _results = eval_offline_by_context_length(
             model_config, env_config, optimizer_config, eval_trajs,
             context_length, cfg.test_horizon, cfg.n_eval_episodes,
-            log_and_visualize)
+            log_and_visualize, model_storage_dir=_model_storage_dir)
         results = {k: results[k] + _results[k] for k in results.keys()}
 
     ## How does performance vary with context length?
@@ -138,7 +139,7 @@ def main(cfg: DictConfig):
 
 def eval_offline_by_context_length(
     model_config, env_config, optimizer_config, eval_trajs,
-    context_length, test_horizon, n_eval_episodes, log_and_visualize):
+    context_length, test_horizon, n_eval_episodes, log_and_visualize, model_storage_dir=None):
     print(f'\nEvaluating context length {context_length}')
 
     results = {
@@ -172,7 +173,7 @@ def eval_offline_by_context_length(
         if model_config['name'] == 'dqn':
             model = model.to(device)
         _log_and_visualize = log_and_visualize and i==0 
-        _returns, _trajectory = train_and_eval_agent(
+        _returns, _trajectory, _state_dict = train_and_eval_agent(
             model, env, optimizer_config, _traj, n_eval_episodes,
             log_and_visualize=_log_and_visualize)
         set_all_seeds()
@@ -180,9 +181,14 @@ def eval_offline_by_context_length(
         results['environment'].append(i)
         results['experienced_reward'].append(experienced_reward)
         results['context_length'].append(context_length)
+
         if log_and_visualize and i < 3:
             agent_trajectories[0].append(_trajectory)
             agent_trajectories[1].append(env)
+
+        if model_storage_dir is not None:
+            with open(os.path.join(model_storage_dir, f'traj_{i}_state_dict.pkl'), 'wb') as f:
+                pickle.dump(_state_dict, f)
 
     if log_and_visualize:
         fig, ax = plt.subplots(figsize=(15, 3))
@@ -261,7 +267,7 @@ def train_and_eval_agent(
 
     print("Eval returns: ", epoch_eval_returns)  # TODO: debug statement
 
-    return epoch_eval_returns, trajectories[0]
+    return epoch_eval_returns, trajectories[0], best_q_loss_state_dict
 
 
 if __name__ == '__main__':
