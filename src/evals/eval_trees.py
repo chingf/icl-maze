@@ -11,11 +11,13 @@ from src.envs.trees import (
     TreeEnv,
     TreeEnvVec,
 )
+from src.envs.cntrees import (
+    CnTreeEnv,
+)
 from src.utils import convert_to_tensor
 from src.evals.eval_darkroom import EvalDarkroom
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
 class EvalTrees(EvalDarkroom):
     def __init__(self):
@@ -107,3 +109,23 @@ class EvalTrees(EvalDarkroom):
         ax.set_xlabel('X Position')
         ax.set_ylabel('Y Position')
         ax.set_title(f'Agent Path - Environment {i}')
+
+
+class EvalCntrees(EvalTrees):
+    def create_env(self, config, goal, i_eval):
+        _config = {
+            'max_layers': config['max_layers'],
+            'horizon': config['horizon'],
+            'branching_prob': config['branching_prob'],
+            'node_encoding_corr': config['node_encoding_corr'],
+            'state_dim': config['state_dim'],
+            'goal': goal
+            }
+        if isinstance(config['initialization_seed'], list):
+            _config['initialization_seed'] = config['initialization_seed'][i_eval]
+        else:
+            _config['initialization_seed'] = config['initialization_seed']
+        return CnTreeEnv(**_config)
+
+    def create_vec_env(self, envs):
+        return TreeEnvVec(envs)
