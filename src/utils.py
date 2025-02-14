@@ -105,6 +105,7 @@ def build_env_name(env_config):
         env_filename += '_layers' + str(env_config['max_layers'])
         env_filename += '_bprob' + str(env_config['branching_prob'])
         env_filename += '_corr' + str(env_config['node_encoding_corr'])
+        env_filename += '_state_dim' + str(env_config['state_dim'])
         env_filename += '_envs' + str(env_config['n_envs'])
         env_filename += '_H' + str(env_config['horizon'])
         env_filename += '_' + env_config['rollin_type']
