@@ -35,30 +35,22 @@ class TransformerAgent(Agent):
 
         states = torch.tensor(np.array(state)).float().to(device)
         if self.batch_size == 1:
+            states = states.squeeze()
             states = states[None, :]
         self.batch['query_states'] = states
 
         actions = self.model(self.batch).cpu().detach().numpy()
-        if self.batch_size == 1:
-            actions = actions[0]
 
         if self.sample:
-            if self.batch_size > 1:
-                action_indices = []
-                for idx in range(self.batch_size):
-                    probs = scipy.special.softmax(actions[idx] / self.temp)
-                    sampled_action = np.random.choice(
-                        np.arange(self.action_dim), p=probs)
-                    action_indices.append(sampled_action)
-            else:
-                probs = scipy.special.softmax(actions / self.temp)
-                action_indices = [np.random.choice(
-                    np.arange(self.action_dim), p=probs)]
+            action_indices = []
+            for idx in range(self.batch_size):
+                probs = scipy.special.softmax(actions[idx] / self.temp)
+                sampled_action = np.random.choice(
+                    np.arange(self.action_dim), p=probs)
+                action_indices.append(sampled_action)
         else:
             action_indices = np.argmax(actions, axis=-1)
 
         actions = np.zeros((self.batch_size, self.action_dim))
         actions[np.arange(self.batch_size), action_indices] = 1.0
-        if self.batch_size == 1:
-            actions = actions[0]
         return actions

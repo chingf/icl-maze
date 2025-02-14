@@ -64,7 +64,6 @@ class Transformer(pl.LightningModule):
     def forward_inference_mode(self, x):
         query_states = x['query_states'][:, None, :]
         zeros = x['zeros'][:, None, :]
-
         state_seq = torch.cat([x['context_states'], query_states], dim=1)
         action_seq = torch.cat(
             [x['context_actions'], zeros[:, :, :self.action_dim]], dim=1)
