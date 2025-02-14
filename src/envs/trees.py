@@ -95,7 +95,7 @@ class TreeEnv(BaseEnv):
             'last_action': None,
             }
         
-        self.forbidden_states = None  # TODO: debug
+        self.reset_state_bank = None
         
     def clone(self):
         """Creates a new TreeEnv instance with identical parameters."""
@@ -163,6 +163,9 @@ class TreeEnv(BaseEnv):
     def sample_state(self, from_origin=False):
         if from_origin:
             return np.array(list(self.root.encoding_vector))
+        elif self.reset_state_bank is not None:
+            state = self.reset_state_bank[np.random.choice(len(self.reset_state_bank))]
+            return np.array(state)
         else:
             valid_states = list(self.node_map.keys())
             state = valid_states[np.random.choice(len(valid_states))]
@@ -177,19 +180,15 @@ class TreeEnv(BaseEnv):
     def reset(self, from_origin=False):
         self.optimal_action_map, self.dist_from_goal = self.make_opt_action_dict()
         self.current_step = 0
-        forbidden_states = self.forbidden_states  # TODO: used for debugging, remove later
         if from_origin:
             return list(self.root.encoding_vector)
         else:
             attempts = 0
             while True:
                 state = self.sample_state()
-                if self.dist_from_goal[tuple(state.tolist())] >= 0.5*(self.max_layers - 1):  # TODO: switch back to 1.5
+                if self.dist_from_goal[tuple(state.tolist())] >= (self.max_layers - 1):
                     s = state.tolist()
-                    if (forbidden_states is not None) and (s not in forbidden_states):
-                        break
-                    elif forbidden_states is None:
-                        break
+                    break
                 attempts += 1
                 if attempts > 200:
                     import pdb; pdb.set_trace()
