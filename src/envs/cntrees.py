@@ -54,7 +54,7 @@ class CnTreeEnv(TreeEnv):
             'current_state': None,
             'last_action': None,
             }
-        self.forbidden_states = None  # TODO: remove later, useful for debugging
+        self.reset_state_bank = None
         
     def clone(self):
         """Creates a new TreeEnv instance with identical parameters."""
@@ -75,19 +75,20 @@ class CnTreeEnv(TreeEnv):
             curr_loc = (2**layer)-1 + pos
         encoding_vector = expansion_mat @ dist_mat[curr_loc]
         encoding_vector = encoding_vector / np.linalg.norm(encoding_vector)
+        encoding_vector = encoding_vector.astype(np.float32)
         return tuple(encoding_vector.tolist())
 
     def _generate_random_tree(self):
         """Generates a random tree structure"""
-        expansion_mat = np.random.randn(self.state_dim, 2**self.max_layers-1)
+        expansion_mat = np.random.randn(
+            self.state_dim, 2**self.max_layers-1).astype(np.float32)
         #expansion_mat[np.abs(expansion_mat) < 1.5] = 0
-
         #expansion_mat = np.random.choice([-1, 1], size=(self.state_dim, 2**self.max_layers-1))
 
         dist_mat = pickle.load(open(
             os.path.join(abs_path, f'depth{self.max_layers}_distance_matrix.pkl'), 'rb'
             ))
-        # Apply correlation based on geodesic distance
+        dist_mat = dist_mat.astype(np.float32)
         dist_mat = np.power(self.node_encoding_corr, dist_mat)
         self.root = root = Node(
             0, 0, encoding_vector=self._sample_node_encoding(0, 0, expansion_mat, dist_mat))
