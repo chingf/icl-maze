@@ -1,17 +1,23 @@
 defaults:
   - model: dqn
-  - env: tree_dqn
+  - env: cntree 
   - optimizer: dqn
   - _self_
 
-wandb:
-  project: dqn_random_tree
+env:
+  n_envs: 1000
+  horizon: 1600
+  branching_prob: 1.
+  node_encoding_corr: 0.25
 
-n_eval_envs: 10 #50 # (~per-mouse, each environment contains a different interaction history)
+wandb:
+  project: dqn_cntree
+
+continual_weights: false
+n_eval_envs: 25 # (~per-mouse, each environment contains a different interaction history)
 test_horizon: 400  # (horizon for each evaluation episode)
-n_eval_episodes: 10 #40 # (per environment)
+n_eval_episodes: 10 # (per environment)
 storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
 
-override_eval_dataset_path: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/dqn_random_tree/tree_layers7_bprob1.0_envs1000_H1600_explore/datasets/eval.pkl 
-override_params:
-  - branching_prob: 1.
+override_eval_dataset_path: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/cntree/cntree_layers7_bprob1.0_corr0.25_state_dim10_envs1000_H1600_explore/datasets/eval.pkl 
+override_params: {}

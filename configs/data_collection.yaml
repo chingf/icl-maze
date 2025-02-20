@@ -1,11 +1,12 @@
 defaults:
-  - env: cntree #tree
+  - env: cntree
   - _self_
 
-#env:
-#  n_envs: 300000 #1000
-#  branching_prob: 0.9 #1.0
-#  horizon: 800 #1600
+env:
+  node_encoding_corr: 0.
+  n_envs: 1000  # To make test dataset
+  branching_prob: 1.0  # To make test dataset
+  horizon: 1600  # To make test dataset
 
 from_origin: True
 

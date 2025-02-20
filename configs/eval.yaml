@@ -1,30 +1,34 @@
 defaults:
   - model: transformer_end_query
-  - env: tree
+  - env: cntree
   - optimizer: default  # For finding the relevant trained model
   - _self_
 
 wandb:
-  project: random_tree #7layer #lazyload
+  project: cntree
 
-env:
-  n_envs: 300000
+#env:
+#  node_encoding_corr: 0.0
 
+#model:
+#  n_layer: 3
+#
 optimizer:
   lr: 1e-5
 
 seed: 0
 epoch: best
-n_eval_envs: 50 # (~per-mouse, each environment contains a different interaction history)
+n_eval_envs: 40 # (~per-mouse, each environment contains a different interaction history)
 test_horizon: 400  # (horizon for each evaluation episode)
 
 # Eval-specific parameters
-offline_eval_episodes: 5 #15 # (per environment)  # TODO
+offline_eval_episodes: 10 # (per environment)  # TODO
 online_eps_in_context: 1 # (number of episodes to keep in context)
 online_eval_episodes: 40 # (number of sequential episodes to run)
 
 storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
 
-override_eval_dataset_path: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/random_tree/tree_layers7_bprob1.0_envs1000_H1600_explore/datasets/eval.pkl
+#override_eval_dataset_path: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/cntree/cntree_layers7_bprob1.0_corr0.25_state_dim10_envs1000_H1600_explore/datasets/eval.pkl 
+override_eval_dataset_path: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/cntree/cntree_layers7_bprob1.0_corr0.25_state_dim10_envs1000_H1600_explore/datasets/eval.pkl 
 override_params:
   - branching_prob: 1.0

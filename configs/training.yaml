@@ -1,21 +1,17 @@
 defaults:
   - model: transformer_end_query
-  - env: tree
+  - env: cntree
   - optimizer: default
   - _self_
 
-model:
-  dropout: 0
-  n_layer: 3
-
 optimizer:
-  lr: 1e-6
+  lr: 1e-5
 
 env:
-  n_envs: 300000
+  node_encoding_corr: 0.25
 
 wandb:
-  project: random_tree
+  project: cntree
 
 seed: 0
 storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
