@@ -238,8 +238,11 @@ def main(cfg: DictConfig):
         'experienced_reward': [],
         'context_length': []
     }
-    context_lengths = np.array([0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 400, 500, 600, 700, 800, 900, 1000])
-    context_lengths = np.linspace(0, max_context_length, 10, dtype=int)
+    context_lengths = np.concatenate([
+        np.arange(0, 325, 25),  # 0 to 300 in steps of 25
+        np.arange(400, max_context_length + 100, 100)  # 400 onwards in steps of 100
+    ])
+    #context_lengths = np.linspace(0, max_context_length, 10, dtype=int)
     context_lengths_to_visualize = [
         context_lengths[context_lengths.size//10],
         context_lengths[context_lengths.size//3],
