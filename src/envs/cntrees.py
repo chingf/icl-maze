@@ -58,7 +58,7 @@ class CnTreeEnv(TreeEnv):
         
     def clone(self):
         """Creates a new TreeEnv instance with identical parameters."""
-        return TreeEnv(
+        env = CnTreeEnv(
             max_layers=self.max_layers,
             branching_prob=self.branching_prob,
             horizon=self.horizon,
@@ -67,6 +67,12 @@ class CnTreeEnv(TreeEnv):
             state_dim=self.state_dim,
             goal=self.goal
         )
+        env.reset_state_bank = self.reset_state_bank
+        if self.optimal_action_map is not None:
+            env.optimal_action_map = self.optimal_action_map
+        if self.dist_from_goal is not None:
+            env.dist_from_goal = self.dist_from_goal
+        return env
     
     def _sample_node_encoding(self, layer, pos, expansion_mat, dist_mat):
         if layer == pos == 0:

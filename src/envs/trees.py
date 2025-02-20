@@ -99,7 +99,7 @@ class TreeEnv(BaseEnv):
         
     def clone(self):
         """Creates a new TreeEnv instance with identical parameters."""
-        return TreeEnv(
+        env = TreeEnv(
             max_layers=self.max_layers,
             branching_prob=self.branching_prob,
             horizon=self.horizon,
@@ -107,7 +107,9 @@ class TreeEnv(BaseEnv):
             node_encoding=self.node_encoding,
             goal=self.goal
         )
-    
+        env.reset_state_bank = self.reset_state_bank
+        return env
+
     def _find_encoding_by_position(self, layer, pos):
         for node in self.node_map.values():
             if node.layer == layer and node.pos == pos:
