@@ -7,8 +7,7 @@ import torch
 from IPython import embed
 
 from src.evals.eval_darkroom import EvalDarkroom
-from src.evals.eval_maze import EvalMaze
-from src.evals.eval_trees import EvalTrees
+from src.evals.eval_trees import EvalTrees, EvalCntrees
 from src.utils import (
     build_env_name,
     build_model_name,
@@ -94,7 +93,7 @@ def main(cfg: DictConfig):
         eval_trajs = random.sample(eval_trajs, n_eval_envs)
         random.seed()
     max_context_length = eval_trajs[0]['context_rewards'].shape[0]
-    max_context_length = min(max_context_length, 1200)
+    max_context_length = min(max_context_length, 1000)
     print(f'Max context length: {max_context_length}')
 
     # Online and offline evaluation.
@@ -108,16 +107,6 @@ def main(cfg: DictConfig):
             'dim': env_config['dim'],
         }
         eval_func = EvalDarkroom()
-    elif env_config['env'] == 'maze':
-        config = {
-            'online_eval_episodes': cfg.online_eval_episodes,
-            'online_eps_in_context': cfg.online_eps_in_context,
-            'offline_eval_episodes': cfg.offline_eval_episodes,
-            'horizon': cfg.test_horizon,
-            'n_eval_envs': n_eval_envs,
-            'layers': env_config['layers'],
-        }
-        eval_func = EvalMaze()
     elif env_config['env'] == 'tree':
         config = {
             'online_eval_episodes': cfg.online_eval_episodes,
@@ -130,6 +119,20 @@ def main(cfg: DictConfig):
             'node_encoding': env_config['node_encoding']
         }
         eval_func = EvalTrees()
+    elif env_config['env'] == 'cntree':
+        config = {
+            'online_eval_episodes': cfg.online_eval_episodes,
+            'online_eps_in_context': cfg.online_eps_in_context,
+            'offline_eval_episodes': cfg.offline_eval_episodes,
+            'horizon': cfg.test_horizon,
+            'n_eval_envs': n_eval_envs,
+            'max_layers': env_config['max_layers'],
+            'branching_prob': env_config['branching_prob'],
+            'node_encoding_corr': env_config['node_encoding_corr'],
+            'state_dim': env_config['state_dim'],
+        }
+        eval_func = EvalCntrees()
+
 
 #    eval_func.continual_online(eval_trajs, model, config)
 #    fig = plt.gcf()
@@ -149,14 +152,14 @@ def main(cfg: DictConfig):
         'experienced_reward': [],
         'context_length': []
     }
-    context_lengths = np.linspace(0, max_context_length, 20, dtype=int)
+    context_lengths = np.array([0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 400, 500, 600, 700, 800, 900, 1000])
     context_lengths_to_visualize = [
         context_lengths[context_lengths.size//10],
         context_lengths[context_lengths.size//3],
         context_lengths[2*(context_lengths.size//3)],
         context_lengths[-1],
         ]
-    for _context_length in context_lengths:
+    for _context_length in context_lengths:  # TODO: revert
         _eval_trajs = []
         for traj in eval_trajs:  # Generate truncated trajectories
             _traj = {}
@@ -184,12 +187,13 @@ def main(cfg: DictConfig):
             results['experienced_reward'].extend(experienced_rewards[:n_eval_envs])
             results['context_length'].extend([_context_length]*n_eval_envs)
 
-        if _context_length in context_lengths_to_visualize and env_config['env'] == 'tree':
-            fig, ax = plt.subplots(figsize=(15, 3))
-            eval_func.plot_trajectory(_obs, _envs, ax)
-            wandb_logger.experiment.log(
-                {"sample_paths_context_len_{}".format(_context_length): wandb.Image(fig)}) 
-            plt.clf()
+        if _context_length in context_lengths_to_visualize and 'tree' in env_config['env']:
+            if _obs is not None:
+                fig, ax = plt.subplots(figsize=(15, 3))
+                eval_func.plot_trajectory(_obs, _envs, ax)
+                wandb_logger.experiment.log(
+                    {"sample_paths_context_len_{}".format(_context_length): wandb.Image(fig)}) 
+                plt.clf()
 
     results = pd.DataFrame(results)
     opt_return = results[results['model']=='Opt']['return'].mean()
