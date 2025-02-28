@@ -17,5 +17,4 @@ echo $CONDA_DEFAULT_ENV
 
 #python make_tree_seeds.py env.state_dim=20
 #python collect_data.py env.state_dim=20
-python train.py env.node_encoding_corr=0. optimizer.lr=0.0001 model.n_layer=3 
-
+python train.py 

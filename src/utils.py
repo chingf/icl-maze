@@ -132,6 +132,9 @@ def build_model_name(model_config, optimizer_config):
         model_filename += '_target' + str(model_config['target_update'])
         model_filename += '_lr' + str(optimizer_config['lr'])
         model_filename += '_temp' + str(model_config['action_temp'])
+    elif model_filename == 'q_table':
+        model_filename += '_gamma' + str(model_config['gamma'])
+        model_filename += '_temp' + str(model_config['action_temp'])
     return model_filename
 
 def build_dataset_name(mode):

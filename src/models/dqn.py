@@ -11,7 +11,7 @@ from src.utils import print_tree
 
 
 class DQN(nn.Module):
-    """Deep Q-Network class."""
+    """Deep Q-Network class, for a single environment! Doesn't have batching across environments."""
 
     def __init__(
         self,
@@ -166,24 +166,24 @@ class DQN(nn.Module):
             return returns, trajectory
 
     def deploy_vec(self, envs, horizon):
-            num_envs = len(envs)
-            returns = np.zeros(num_envs)
-            trajectories = [[] for _ in range(num_envs)]
-            states = [torch.tensor(env.reset(), device=self.device, dtype=torch.float32) for env in envs]
-            
-            with torch.no_grad():
-                for t in range(horizon):
-                    actions = self.select_action_vec(states)
-                    for i, env in enumerate(envs):
-                        action_array = np.zeros(self.action_dim)
-                        action_array[actions[i]] = 1
-                        next_state, reward, done, _ = env.step(action_array)
-                        
-                        returns[i] += reward
-                        trajectories[i].append(states[i].cpu().numpy())
-                        states[i] = torch.tensor(next_state, device=self.device, dtype=torch.float32)
-            
-            return returns, trajectories
+        num_envs = len(envs)
+        returns = np.zeros(num_envs)
+        trajectories = [[] for _ in range(num_envs)]
+        states = [torch.tensor(env.reset(), device=self.device, dtype=torch.float32) for env in envs]
+        
+        with torch.no_grad():
+            for t in range(horizon):
+                actions = self.select_action_vec(states)
+                for i, env in enumerate(envs):
+                    action_array = np.zeros(self.action_dim)
+                    action_array[actions[i]] = 1
+                    next_state, reward, done, _ = env.step(action_array)
+                    
+                    returns[i] += reward
+                    trajectories[i].append(states[i].cpu().numpy())
+                    states[i] = torch.tensor(next_state, device=self.device, dtype=torch.float32)
+        
+        return returns, trajectories
 
 
     ## Optimization functions below

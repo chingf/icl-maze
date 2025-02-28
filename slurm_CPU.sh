@@ -15,7 +15,4 @@ which python
 python --version
 echo $CONDA_DEFAULT_ENV
 
-python make_tree_seeds.py env.node_encoding_corr=0.25 env.state_dim=20
-python collect_data.py env.node_encoding_corr=0.25 env.state_dim=20
-
-
+python eval_dqn_offline.py --config-name eval_q_table model.action_temp=0.01 model.gamma=0.8

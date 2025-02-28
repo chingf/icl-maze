@@ -7,18 +7,13 @@ defaults:
 wandb:
   project: cntree
 
-#env:
-#  node_encoding_corr: 0.0
-
-#model:
-#  n_layer: 3
-#
-optimizer:
-  lr: 1e-5
+model:
+  n_layer: 3
+  dropout: 0.2
 
 seed: 0
 epoch: best
-n_eval_envs: 40 # (~per-mouse, each environment contains a different interaction history)
+n_eval_envs: 30 # (~per-mouse, each environment contains a different interaction history)
 test_horizon: 400  # (horizon for each evaluation episode)
 
 # Eval-specific parameters

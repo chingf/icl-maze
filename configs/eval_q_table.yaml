@@ -1,14 +1,23 @@
 defaults:
   - model: q_table
-  - env: tree_q_table
+  - env: cntree
   - optimizer: q_table
   - _self_
 
-wandb:
-  project: dqn_full
+env:
+  n_envs: 1000
+  horizon: 1600
+  branching_prob: 1.
+  node_encoding_corr: 0.25  # Doesn't really matter for q_table
 
-n_eval_envs: 30 
-n_eval_episodes: 50 # (per environment)
-test_horizon: 800  # (horizon for each evaluation episode)
+wandb:
+  project: dqn_cntree
+
+continual_weights: false
+n_eval_envs: 15 # (~per-mouse, each environment contains a different interaction history)
+test_horizon: 400  # (horizon for each evaluation episode)
+n_eval_episodes: 20 # (per environment)
 storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
-#storage_dir: /n/holylabs/LABS/krajan_lab/Lab/cfang/icl-maze
+
+override_eval_dataset_path: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/cntree/cntree_layers7_bprob1.0_corr0.25_state_dim10_envs1000_H1600_explore/datasets/eval.pkl 
+override_params: {}

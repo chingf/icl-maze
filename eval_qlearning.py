@@ -225,10 +225,6 @@ def train_and_eval_agent(
     best_q_loss_epoch = None
     best_q_loss_state_dict = None
     for i in range(n_training_epochs):
-        #if i > 50:
-        #    debug = True
-        #    xx = [traj['context_next_states'][i] for i in range(traj['context_rewards'].size) if traj['context_rewards'][i]>0]
-        #    import pdb; pdb.set_trace()
         losses = model.training_epoch()
         loss = np.mean(losses)
         if log_and_visualize:

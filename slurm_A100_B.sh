@@ -15,4 +15,4 @@ which python
 python --version
 echo $CONDA_DEFAULT_ENV
 
-python eval_dqn_continual.py wandb.project=dqn_random_tree_cont model.action_temp=0.05
+python eval_dqn_offline.py --config-name eval_q_table model.action_temp=0.01

@@ -1,4 +1,4 @@
 lr: 1e-1
-num_epochs: 200
+num_epochs: 1500
 batch_size: 512
 weight_decay: 0

@@ -4,11 +4,16 @@ defaults:
   - optimizer: default
   - _self_
 
+model:
+  n_layer: 3
+  n_embd: 512
+  dropout: 0.2
+
 optimizer:
   lr: 1e-5
 
 env:
-  node_encoding_corr: 0.25
+  node_encoding_corr: 0.0
 
 wandb:
   project: cntree

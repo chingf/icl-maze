@@ -15,4 +15,4 @@ which python
 python --version
 echo $CONDA_DEFAULT_ENV
 
-python eval_dqn_continual.py wandb.project=dqn_random_tree_cont
+python eval_offline.py

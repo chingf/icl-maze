@@ -215,6 +215,7 @@ class Transformer(pl.LightningModule):
         optimizer_dict = {'optimizer': optimizer}
 
         if self.optimizer_config['use_scheduler']:
+            print("Using scheduler")
             lr_scheduler = {  # linearly decrease LR
                 'scheduler': torch.optim.lr_scheduler.LinearLR(
                 optimizer,

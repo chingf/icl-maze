@@ -45,6 +45,11 @@ class RNN(pl.LightningModule):
             2 * self.state_dim + self.action_dim + 1, self.n_embd)
         self.loss_fn = nn.CrossEntropyLoss(reduction='sum')
         self.pred_actions = nn.Linear(self.n_embd, self.action_dim)
+        #torch.nn.Sequential(
+        #    nn.Linear(self.n_embd, self.n_embd//2),
+        #    nn.ReLU(),
+        #    nn.Linear(self.n_embd//2, self.action_dim)
+        #)
 
     def forward(self, x):
         query_states = x['query_states'][:, None, :]
@@ -67,14 +72,14 @@ class RNN(pl.LightningModule):
 
         # Run through RNN
         rnn_hidden = None
-        pred_list = []
+        rnn_query_outputs = []
         for i in range(seq_len):
             rnn_outputs, rnn_hidden = self.rnn(stacked_inputs[:, i:i+1, :], rnn_hidden)
             if i % query_every == 0 or i == seq_len - 1:
-                rnn_query_output, _ = self.rnn(query, rnn_hidden)
-                pred_output = self.pred_actions(rnn_query_output)
-                pred_list.append(pred_output)
-        preds = torch.cat(pred_list, dim=1)  # Should be (batch, seq_len, action_dim)
+                _rnn_query_output, _ = self.rnn(query, rnn_hidden)
+                rnn_query_outputs.append(_rnn_query_output)
+        rnn_query_outputs = torch.cat(rnn_query_outputs, dim=1)
+        preds = self.pred_actions(rnn_query_outputs)
 
         if self.test:
             return preds[:, -1, :]

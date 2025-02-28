@@ -1,15 +1,6 @@
 #!/bin/bash
 
-python make_tree_seeds.py
-python collect_data.py
-python train.py
+python eval_dqn_offline.py --config-name eval_q_table model.action_temp=0.05
+python eval_dqn_offline.py --config-name eval_q_table model.action_temp=0.5
+python eval_dqn_offline.py --config-name eval_q_table model.action_temp=1.0
 
-python make_tree_seeds.py env.horizon=600
-python collect_data.py env.horizon=600
-python train.py env.horizon=600
-
-python train.py model.n_head=8
-
-python eval.py
-python eval.py env.horizon=600
-python eval.py model.n_head=8

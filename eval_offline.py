@@ -249,7 +249,6 @@ def main(cfg: DictConfig):
         context_lengths[2*(context_lengths.size//3)],
         context_lengths[-1],
         ]
-    context_lengths = [max_context_length]
     for traj_idx, traj in enumerate(eval_trajs):
         print('Environment: ', traj_idx)
         env_config = copy(config)
