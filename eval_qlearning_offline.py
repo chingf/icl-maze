@@ -4,7 +4,6 @@ import h5py
 import random
 import matplotlib.pyplot as plt
 import torch
-from IPython import embed
 from src.envs.cntrees import CnTreeEnv
 from src.envs.trees import TreeEnv
 from src.evals.eval_trees import EvalTrees
@@ -21,7 +20,6 @@ import hydra
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 import wandb
-from wandb import init, log
 from copy import copy, deepcopy
 wandb.login()
 

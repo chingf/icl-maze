@@ -4,7 +4,6 @@ import h5py
 import random
 import matplotlib.pyplot as plt
 import torch
-from IPython import embed
 from src.evals.eval_trees import EvalTrees
 from src.utils import (
     build_env_name,
@@ -19,8 +18,6 @@ import hydra
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 import wandb
-from wandb import init, log
-from copy import deepcopy
 wandb.login()
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

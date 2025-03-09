@@ -5,8 +5,6 @@ from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 import wandb
 import torch.multiprocessing as mp
-import transformers
-transformers.set_seed(0)
 from transformers import GPT2Config, GPT2Model
 from src.models.transformer import Transformer
 from IPython import embed

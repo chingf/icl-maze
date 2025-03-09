@@ -5,8 +5,6 @@ import h5py
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 import torch
-from IPython import embed
-
 from src.agents.agent import TransformerAgent
 from src.envs.cntrees import CnTreeEnv
 from src.envs.trees import TreeEnv, TreeEnvVec

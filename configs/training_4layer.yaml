@@ -4,6 +4,12 @@ defaults:
   - optimizer: default
   - _self_
 
+model:
+  n_layer: 4
+
+optimizer:
+  batch_size: 256
+
 wandb:
   project: tree_maze
 

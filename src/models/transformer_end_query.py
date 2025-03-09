@@ -1,16 +1,10 @@
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
-from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks import ModelCheckpoint
-import torch.multiprocessing as mp
-import transformers
-transformers.set_seed(0)
-from transformers import GPT2Config
+from transformers import GPT2Config, set_seed
 from src.models.simple_gpt2 import SimpleGPT2Model
 from src.models.fixedmemory_gpt2 import FixedMemoryGPT2Model
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
 
 class Transformer(pl.LightningModule):
     """Transformer class."""
@@ -26,6 +20,7 @@ class Transformer(pl.LightningModule):
         train_on_last_pred_only: bool,
         test: bool,
         name: str,
+        initialization_seed: int,
         optimizer_config: dict,
         linear_attention: bool = False,
         ):
@@ -40,8 +35,10 @@ class Transformer(pl.LightningModule):
         self.dropout = dropout
         self.train_on_last_pred_only = train_on_last_pred_only
         self.test = test
+        self.initialization_seed = initialization_seed
         self.optimizer_config = optimizer_config = optimizer_config
         self.linear_attention = linear_attention
+        set_seed(self.initialization_seed)
 
         config = GPT2Config(
             n_positions=2000,  # Position embeddings are not used, but make sure it's > seq length for inference mode
@@ -238,19 +235,6 @@ class Transformer(pl.LightningModule):
         except:
             print('Attempted to delete WTE in transformer, but could not find.')
 
-    #def on_after_backward(self):
-    #    # Check for NaNs in gradients
-    #    for name, param in self.named_parameters():
-    #        if param.grad is not None and torch.isnan(param.grad).any():
-    #            print(f"NaNs detected in gradients of {name}")
-    #            raise ValueError(f"NaNs detected in gradients of {name}")
-    #        
-    #        if torch.isnan(param).any():
-    #            print(f"NaNs detected in model parameters of {name}")
-    #            raise ValueError(f"NaNs detected in model parameters of {name}")
-    #        
-    #        norm = torch.norm(param.data).item()
-    #        print(f"{name}: {norm:.6f}")
 
 class FixedMemoryTransformer(Transformer):
     """Transformer class."""

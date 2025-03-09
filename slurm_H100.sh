@@ -15,6 +15,8 @@ which python
 python --version
 echo $CONDA_DEFAULT_ENV
 
-#python make_tree_seeds.py env.state_dim=20
-#python collect_data.py env.state_dim=20
-python train.py 
+python train.py optimizer.batch_size=256 optimizer.num_epochs=75 optimizer.use_scheduler=True
+python train.py optimizer.batch_size=256 optimizer.num_epochs=75 optimizer.use_scheduler=True model.initialization_seed=1
+python train.py optimizer.batch_size=256 optimizer.num_epochs=75 optimizer.use_scheduler=True model.initialization_seed=2
+python train.py optimizer.batch_size=256 optimizer.num_epochs=75 optimizer.use_scheduler=True model.initialization_seed=3
+python train.py optimizer.batch_size=256 optimizer.num_epochs=75 optimizer.use_scheduler=True model.initialization_seed=4

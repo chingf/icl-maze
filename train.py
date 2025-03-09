@@ -6,26 +6,22 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
+from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning import LightningDataModule
-from pytorch_lightning.callbacks import Callback
-
 import wandb
-wandb.login()
-
-import numpy as np
-import random
 from src.dataset import get_dataset, HDF5Dataset
 from src.utils import (
     build_env_name,
     build_model_name,
-    build_dataset_name,
     ShuffleIndicesCallback
 )
 
 torch.set_float32_matmul_precision('medium')
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 n_gpus = torch.cuda.device_count()
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+wandb.login()
 
 @hydra.main(version_base=None, config_path="configs", config_name="training")
 def main(cfg: DictConfig):
@@ -38,7 +34,6 @@ def main(cfg: DictConfig):
     model_config['optimizer_config'] = optimizer_config
     model = instantiate(model_config)
     model = model.to(device)
-
 
     # Directory path handling
     env_name = build_env_name(env_config)
@@ -55,25 +50,11 @@ def main(cfg: DictConfig):
     test_dset_path = os.path.join(dataset_storage_dir, 'test' + file_suffix)
     os.makedirs(model_storage_dir, exist_ok=True)
 
-    # Random seed handling 
-    tmp_seed = seed = cfg.seed
-    if seed == -1:
-        tmp_seed = 0
-    torch.manual_seed(tmp_seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(tmp_seed)
-        torch.cuda.manual_seed_all(tmp_seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    np.random.seed(tmp_seed)
-    random.seed(tmp_seed)
-
     # Set up logging and checkpointing
     wandb_config = {
         'env': env_config,
         'model': model_config,
         'optimizer': optimizer_config,
-        'seed': seed
     }
     wandb_logger = WandbLogger(
         project=cfg.wandb.project,
@@ -102,15 +83,6 @@ def main(cfg: DictConfig):
         monitor='val_loss',
         mode='min',
         save_last=True
-    )
-
-    # Early stopping callback
-    early_stopping = EarlyStopping(
-        monitor='val_loss',
-        patience=optimizer_config['early_stopping_patience'],
-        min_delta=optimizer_config['early_stopping_min_delta'],
-        mode='min',
-        verbose=True,
     )
 
     # Dataset shuffler callback
@@ -175,13 +147,11 @@ class DataModule(LightningDataModule):
         return torch.utils.data.DataLoader(
             self.train_dataset, self.batch_size,
             shuffle=(not isinstance(self.train_dataset, HDF5Dataset)),
-            num_workers=self.optimizer_config['num_workers'],
         )
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(
             self.test_dataset, self.batch_size,
-            num_workers=self.optimizer_config["num_workers"],
         )
     
     def teardown(self, stage=None):

@@ -119,7 +119,10 @@ def build_model_name(model_config, optimizer_config):
         model_filename += '_head' + str(model_config['n_head'])
         model_filename += '_lr' + str(optimizer_config['lr'])
         model_filename += '_drop' + str(model_config['dropout'])
+        model_filename += '_initseed' + str(model_config['initialization_seed'])
         model_filename += '_batch' + str(optimizer_config['batch_size'])
+        if optimizer_config['use_scheduler'] == False:
+            model_filename += '_nosched'
     elif 'rnn' in model_filename:
         model_filename += '_embd' + str(model_config['n_embd'])
         model_filename += '_layer' + str(model_config['n_layer'])

@@ -1,6 +1,5 @@
 #!/bin/bash
 
-python eval_dqn_offline.py --config-name eval_q_table model.action_temp=0.05
-python eval_dqn_offline.py --config-name eval_q_table model.action_temp=0.5
-python eval_dqn_offline.py --config-name eval_q_table model.action_temp=1.0
-
+python train.py model.initialization_seed=0 optimizer.use_scheduler=False optimizer.lr=1e-5 optimizer.num_epochs=100
+python train.py model.initialization_seed=1 optimizer.use_scheduler=False optimizer.lr=1e-5 optimizer.num_epochs=100
+python train.py model.initialization_seed=2 optimizer.use_scheduler=False optimizer.lr=1e-5 optimizer.num_epochs=100
