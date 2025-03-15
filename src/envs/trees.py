@@ -347,6 +347,44 @@ class TreeEnv(BaseEnv):
         self.current_step += 1
         done = (self.current_step >= self.horizon)
         return self.state.copy(), r, done, {}
+    
+    def to_networkx(self, by_node_encoding=False):
+        """Converts the tree structure into a networkx Graph object.
+        
+        Returns:
+            G (networkx.Graph): Graph representation of the tree where:
+                - nodes have attributes: 'layer', 'pos', 'encoding'
+                - edges represent parent-child relationships
+        """
+        import networkx as nx
+        G = nx.Graph()
+
+        def get_identifier(node):
+            if by_node_encoding:
+                return node.encoding()
+            else:
+                return (node.layer, node.pos)
+        
+        # Add all nodes first
+        for encoding, node in self.node_map.items():
+            G.add_node(
+                get_identifier(node),  # use encoding as node identifier
+                layer=node.layer,
+                pos=node.pos,
+                encoding=encoding,
+            )
+        
+        # Add edges by traversing from root
+        def add_edges(node):
+            if node.left:
+                G.add_edge(get_identifier(node), get_identifier(node.left))
+                add_edges(node.left)
+            if node.right:
+                G.add_edge(get_identifier(node), get_identifier(node.right))
+                add_edges(node.right)
+                
+        add_edges(self.root)
+        return G
 
 
 class TreeEnvVec(BaseEnv):

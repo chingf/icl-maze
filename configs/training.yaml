@@ -4,8 +4,12 @@ defaults:
   - optimizer: default
   - _self_
 
+env:
+  node_encoding_corr: 0.25
+
 wandb:
   project: tree_maze
 
 storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
-override_dataset_dir: null #/n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/datasets
+override_dataset_dir: null
+#override_dataset_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/cntree

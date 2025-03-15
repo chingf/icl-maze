@@ -15,8 +15,5 @@ which python
 python --version
 echo $CONDA_DEFAULT_ENV
 
-python train.py optimizer.num_epochs=100 model.dropout=0.2
-python train.py optimizer.num_epochs=100 model.dropout=0.2 model.initialization_seed=1
-python train.py optimizer.num_epochs=100 model.dropout=0.2 model.initialization_seed=2
-python train.py optimizer.num_epochs=100 model.dropout=0.2 model.initialization_seed=3
-python train.py optimizer.num_epochs=100 model.dropout=0.2 model.initialization_seed=4
+python train.py model.n_layer=4 optimizer.batch_size=256
+#python train.py model.dropout=0.2 optimizer.lr=1e-5 optimizer.use_scheduler=False model.initialization_seed=2 optimizer.num_epochs=100

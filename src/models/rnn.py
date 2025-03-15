@@ -6,6 +6,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 import wandb
 import torch.multiprocessing as mp
 from IPython import embed
+from transformers import set_seed
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class RNN(pl.LightningModule):
@@ -21,6 +22,7 @@ class RNN(pl.LightningModule):
         test: bool,
         name: str,
         optimizer_config: dict,
+        initialization_seed: int,
         ):
 
         super(RNN, self).__init__()
@@ -32,6 +34,8 @@ class RNN(pl.LightningModule):
         self.dropout = dropout
         self.test = test
         self.optimizer_config = optimizer_config = optimizer_config
+        self.initialization_seed = initialization_seed
+        set_seed(self.initialization_seed)
 
         print(f"LSTM Dropout: {self.dropout}")
         self.rnn = torch.nn.LSTM(
@@ -129,13 +133,4 @@ class RNN(pl.LightningModule):
             lr=self.optimizer_config['lr'],
             weight_decay=self.optimizer_config['weight_decay']
         )
-        lr_scheduler = {
-            'scheduler': torch.optim.lr_scheduler.LinearLR(
-                optimizer,
-                start_factor=1.0,
-                end_factor=0.1,
-                total_iters=10,
-            ),
-            'monitor': 'val_loss',
-        }
         return {'optimizer': optimizer} #, 'lr_scheduler': lr_scheduler}

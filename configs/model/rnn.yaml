@@ -1,5 +1,6 @@
 _target_: src.models.rnn.RNN
 name: rnn_endquery
-n_embd: 1024
+n_embd: 512
 n_layer: 4
-dropout: 0.5
+dropout: 0.25
+initialization_seed: 0

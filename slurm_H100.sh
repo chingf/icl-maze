@@ -15,8 +15,7 @@ which python
 python --version
 echo $CONDA_DEFAULT_ENV
 
-python train.py optimizer.batch_size=256 optimizer.num_epochs=75 optimizer.use_scheduler=True
-python train.py optimizer.batch_size=256 optimizer.num_epochs=75 optimizer.use_scheduler=True model.initialization_seed=1
-python train.py optimizer.batch_size=256 optimizer.num_epochs=75 optimizer.use_scheduler=True model.initialization_seed=2
-python train.py optimizer.batch_size=256 optimizer.num_epochs=75 optimizer.use_scheduler=True model.initialization_seed=3
-python train.py optimizer.batch_size=256 optimizer.num_epochs=75 optimizer.use_scheduler=True model.initialization_seed=4
+python train.py --config-name training_rnn model.dropout=0.
+
+#python train.py model.dropout=0.2 optimizer.lr=1e-4 optimizer.use_scheduler=True model.initialization_seed=1
+#python train.py model.dropout=0.2 optimizer.lr=1e-4 optimizer.use_scheduler=True model.initialization_seed=2
