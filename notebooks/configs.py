@@ -6,39 +6,40 @@ fig_height = 4.8
 
 import seaborn as sns
 sns.set(
-        font_scale=10/12., #default size is 12pt, scale to 16pt
-        palette='colorblind', #'Set1',
+        font_scale=10/12.,
+        palette='colorblind',
         rc={'axes.axisbelow': True,
-            'axes.edgecolor': 'lightgrey',
+            'axes.edgecolor': 'black',  # Changed from lightgrey to black
             'axes.facecolor': 'None',
             'axes.grid': False,
-            'axes.labelcolor': 'dimgrey',
-            'axes.spines.right': False,
-            'axes.spines.top': False,
-            'text.color': 'dimgrey', #e.g. legend
+            'axes.labelcolor': 'black',  # Changed from dimgrey to black
+            'axes.spines.right': True,   # Changed to True to show all spines
+            'axes.spines.top': True,     # Changed to True to show all spines
+            'text.color': 'black',       # Changed from dimgrey to black
 
             'lines.solid_capstyle': 'round',
             'lines.linewidth': 1,
             'legend.facecolor': 'white',
-            'legend.framealpha':0.8,
+            'legend.framealpha': 0.8,
 
             'xtick.bottom': True,
-            'xtick.color': 'dimgrey',
+            'xtick.color': 'black',      # Changed from dimgrey to black
             'xtick.direction': 'out',
 
-            'ytick.color': 'dimgrey',
+            'ytick.color': 'black',      # Changed from dimgrey to black
             'ytick.direction': 'out',
             'ytick.left': True,
 
-             'xtick.major.size': 2,
-             'xtick.major.width': .5,
-             'xtick.minor.size': 1,
-             'xtick.minor.width': .5,
+            'xtick.major.size': 2,
+            'xtick.major.width': .5,
+            'xtick.minor.size': 1,
+            'xtick.minor.width': .5,
 
-             'ytick.major.size': 2,
-             'ytick.major.width': .5,
-             'ytick.minor.size': 1,
-             'ytick.minor.width': .5})
+            'ytick.major.size': 2,
+            'ytick.major.width': .5,
+            'ytick.minor.size': 1,
+            'ytick.minor.width': .5})
+
 import matplotlib.pyplot as plt
 plt.rcParams['font.family'] = 'sans-serif'
 plt.rcParams['font.sans-serif'] = ['DejaVu Sans'] + plt.rcParams['font.sans-serif']
