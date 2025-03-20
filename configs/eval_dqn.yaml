@@ -11,13 +11,13 @@ env:
   node_encoding_corr: 0.25
 
 wandb:
-  project: dqn_cntree
+  project: tree_maze_qlearning
 
 continual_weights: false
-n_eval_envs: 25 # (~per-mouse, each environment contains a different interaction history)
+n_eval_envs: 30 # (~per-mouse, each environment contains a different interaction history)
 test_horizon: 400  # (horizon for each evaluation episode)
-n_eval_episodes: 10 # (per environment)
+n_eval_episodes: 20 # (per environment)
 storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
 
-override_eval_dataset_path: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/cntree/cntree_layers7_bprob1.0_corr0.25_state_dim10_envs1000_H1600_explore/datasets/eval.pkl 
+override_eval_dataset_path: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/tree_maze/cntree_layers7_bprob1.0_corr0.25_state_dim10_envs1000_H1600_explore/datasets/eval.pkl 
 override_params: {}

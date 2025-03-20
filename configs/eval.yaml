@@ -5,11 +5,14 @@ defaults:
   - _self_
 
 wandb:
-  project: cntree
+  project: tree_maze
+
+env:
+  node_encoding_corr: 0.
 
 model:
-  n_layer: 3
-  dropout: 0.2
+  dropout: 0
+  initialization_seed: 4
 
 seed: 0
 epoch: best
@@ -17,13 +20,12 @@ n_eval_envs: 30 # (~per-mouse, each environment contains a different interaction
 test_horizon: 400  # (horizon for each evaluation episode)
 
 # Eval-specific parameters
-offline_eval_episodes: 10 # (per environment)  # TODO
+offline_eval_episodes: 20 # (per environment)  # TODO
 online_eps_in_context: 1 # (number of episodes to keep in context)
 online_eval_episodes: 40 # (number of sequential episodes to run)
 
 storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
 
-#override_eval_dataset_path: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/cntree/cntree_layers7_bprob1.0_corr0.25_state_dim10_envs1000_H1600_explore/datasets/eval.pkl 
-override_eval_dataset_path: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/cntree/cntree_layers7_bprob1.0_corr0.25_state_dim10_envs1000_H1600_explore/datasets/eval.pkl 
+override_eval_dataset_path: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/tree_maze/cntree_layers7_bprob1.0_corr0.25_state_dim10_envs1000_H1600_explore/datasets/eval.pkl 
 override_params:
   - branching_prob: 1.0

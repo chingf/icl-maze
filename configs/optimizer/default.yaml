@@ -1,5 +1,5 @@
-lr: 1e-5
+lr: 1e-4
 num_epochs: 80
 batch_size: 512
 weight_decay: 1e-5
-use_scheduler: False
+use_scheduler: True

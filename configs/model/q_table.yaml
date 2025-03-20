@@ -1,4 +1,4 @@
 _target_: src.models.q_table.TabularQLearning
 name: q_table
 gamma: 0.85
-action_temp: 0.1
+action_temp: 0.01

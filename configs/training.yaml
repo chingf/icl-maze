@@ -4,12 +4,12 @@ defaults:
   - optimizer: default
   - _self_
 
-env:
-  node_encoding_corr: 0.25
+optimizer:
+  num_epochs: 2000
 
 wandb:
-  project: tree_maze
+  project: tree_maze_more_training
 
 storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
-override_dataset_dir: null
-#override_dataset_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/cntree
+#override_dataset_dir: null
+override_dataset_dir: tree_maze

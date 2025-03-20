@@ -2,18 +2,18 @@ defaults:
   - env: cntree
   - _self_
 
-env:
-  max_layers: 5
-  horizon: 500
-
 #env:
 #  n_envs: 1000  # To make test dataset
 #  branching_prob: 1.0  # To make test dataset
 #  horizon: 1600  # To make test dataset
 
+env:
+  node_encoding_corr: 0.25
+  n_envs: 600000
+
 from_origin: True
 
 wandb:
-  project: smaller_tree_maze
+  project: tree_maze_big_pretraining
 
 storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
