@@ -39,7 +39,7 @@ def main(cfg: DictConfig):
     env_name = build_env_name(env_config)
     model_name = build_model_name(model_config, optimizer_config)
     if cfg.override_dataset_dir is not None:
-        dataset_storage_dir = f'{cfg.override_dataset_dir}/{env_name}'
+        dataset_storage_dir = f'{cfg.storage_dir}/{cfg.override_dataset_dir}/{env_name}/datasets'
     else:
         dataset_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/datasets'
     model_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/models/{model_name}'
