@@ -8,7 +8,7 @@ defaults:
 #  horizon: 1600  # To make test dataset
 
 env:
-  node_encoding_corr: 0.25
+  node_encoding_corr: 0.0
   n_envs: 600000
 
 from_origin: True

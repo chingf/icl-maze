@@ -1,0 +1,19 @@
+defaults:
+  - model: transformer_end_query
+  - env: cntree
+  - optimizer: default
+  - _self_
+
+optimizer:
+  num_epochs: 150
+
+env:
+  n_envs: 600000
+  node_encoding_corr: 0.25
+
+wandb:
+  project: tree_maze_big_pretraining
+
+storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
+override_dataset_dir: null
+#override_dataset_dir: tree_maze

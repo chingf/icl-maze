@@ -3,6 +3,6 @@ name: transformer_end_query
 n_embd: 512
 n_layer: 3
 n_head: 4
-dropout: 0.2
+dropout: 0
 initialization_seed: 0
 train_on_last_pred_only: False
