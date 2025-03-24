@@ -12,7 +12,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 from multiprocessing import Pool
 
-from src.envs.darkroom_env import DarkroomEnv
+from src.envs.darkroom import DarkroomEnv
 from src.envs.trees import TreeEnv
 from src.envs.cntrees import CnTreeEnv
 from src.utils import (
