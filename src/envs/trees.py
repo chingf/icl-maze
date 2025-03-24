@@ -189,7 +189,6 @@ class TreeEnv(BaseEnv):
             while True:
                 state = self.sample_state()
                 if self.dist_from_goal[tuple(state.tolist())] >= (self.max_layers - 1):
-                    s = state.tolist()
                     break
                 attempts += 1
                 if attempts > 200:

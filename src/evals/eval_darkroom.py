@@ -7,7 +7,7 @@ from src.agents.agent import (
     TransformerAgent,
     OptPolicy,
 )
-from src.envs.darkroom_env import (
+from src.envs.darkroom import (
     DarkroomEnv,
     DarkroomEnvVec,
 )

@@ -88,11 +88,9 @@ class CnTreeEnv(TreeEnv):
         """Generates a random tree structure"""
         expansion_mat = np.random.randn(
             self.state_dim, 2**self.max_layers-1).astype(np.float32)
-        #expansion_mat[np.abs(expansion_mat) < 1.5] = 0
-        #expansion_mat = np.random.choice([-1, 1], size=(self.state_dim, 2**self.max_layers-1))
 
         dist_mat = pickle.load(open(
-            os.path.join(abs_path, f'depth{self.max_layers}_distance_matrix.pkl'), 'rb'
+            os.path.join(abs_path, f'tree_geodesic_dist_matrix_depth{self.max_layers}.pkl'), 'rb'
             ))
         dist_mat = dist_mat.astype(np.float32)
         dist_mat = np.power(self.node_encoding_corr, dist_mat)
@@ -150,7 +148,7 @@ if __name__ == '__main__':
     tree = make_new_tree()
 
     dist_mat = pickle.load(open(
-        os.path.join(abs_path, f'depth{tree.max_layers}_distance_matrix.pkl'), 'rb'
+        os.path.join(abs_path, f'tree_geodesic_dist_matrix_depth{tree.max_layers}.pkl'), 'rb'
         ))
     ordered_encodings = [np.nan*np.ones(tree.state_dim) for _ in range(dist_mat.shape[0])]
     idxs = []
