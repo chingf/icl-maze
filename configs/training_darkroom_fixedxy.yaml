@@ -1,0 +1,25 @@
+defaults:
+  - model: transformer_end_query
+  - env: darkroom
+  - optimizer: default
+  - _self_
+
+model:
+  train_query_every: 5
+  n_embd: 512
+  n_layer: 3
+  dropout: 0.
+
+env:
+  env: darkroom_fixedxy
+  state_dim: 2
+  maze_dim: 8
+
+optimizer:
+  batch_size: 1024
+
+wandb:
+  project: darkroom_simple 
+
+storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
+override_dataset_dir: null

@@ -85,8 +85,10 @@ def build_env_name(env_config):
         env_filename += '_envs' + str(env_config['n_envs'])
         env_filename += '_H' + str(env_config['horizon'])
         env_filename += '_' + env_config['rollin_type']
-    elif env_filename == 'darkroom':
-        env_filename += '_dim' + str(env_config['dim'])
+    elif 'darkroom' in env_filename:
+        env_filename += '_dim' + str(env_config['maze_dim'])
+        env_filename += '_corr' + str(env_config['node_encoding_corr'])
+        env_filename += '_state_dim' + str(env_config['state_dim'])
         env_filename += '_envs' + str(env_config['n_envs'])
         env_filename += '_H' + str(env_config['horizon'])
         env_filename += '_' + env_config['rollin_type']

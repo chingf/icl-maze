@@ -1,0 +1,20 @@
+defaults:
+  - env: darkroom
+  - _self_
+
+env:
+  node_encoding_corr: 0.25
+  maze_dim: 8
+  horizon: 250
+
+#env:
+#  env: darkroom_fixedxy
+#  state_dim: 2
+#  maze_dim: 8
+
+wandb:
+  project: darkroom_simple
+
+from_origin: False  # Not relevant for darkroom
+
+storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze

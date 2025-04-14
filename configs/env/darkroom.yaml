@@ -1,8 +1,9 @@
 env: darkroom
-n_envs: 100000
-horizon: 100
-dim: 10
-state_dim: 2
+n_envs: 1500000
+horizon: 150
+maze_dim: 5
+state_dim: 10
 action_dim: 5
+node_encoding_corr: 0.
 store_gpu: True
-rollin_type: uniform
+rollin_type: explore

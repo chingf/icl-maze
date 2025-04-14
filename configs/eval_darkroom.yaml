@@ -1,0 +1,38 @@
+defaults:
+  - model: transformer_end_query
+  - env: darkroom
+  - optimizer: default  # For finding the relevant trained model
+  - _self_
+
+model:
+  train_query_every: 5
+  n_embd: 512
+  n_layer: 3
+  dropout: 0.
+
+env:
+  node_encoding_corr: 0.25
+  maze_dim: 8
+  horizon: 250
+
+optimizer:
+  batch_size: 512
+  num_epochs: 25
+
+wandb:
+  project: darkroom_simple 
+
+seed: 0
+epoch: best
+n_eval_envs: 10 # (~per-mouse, each environment contains a different interaction history)
+test_horizon: 15  # (horizon for each evaluation episode)
+
+# Eval-specific parameters
+offline_eval_episodes: 10 # (per environment)  # TODO
+online_eps_in_context: 1 # (number of episodes to keep in context)
+online_eval_episodes: 40 # (number of sequential episodes to run)
+
+storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
+
+override_eval_dataset_path: null
+override_params: null

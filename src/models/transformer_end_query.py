@@ -23,6 +23,7 @@ class Transformer(pl.LightningModule):
         initialization_seed: int,
         optimizer_config: dict,
         linear_attention: bool = False,
+        train_query_every: int = 10,
         ):
 
         super(Transformer, self).__init__()
@@ -38,6 +39,7 @@ class Transformer(pl.LightningModule):
         self.initialization_seed = initialization_seed
         self.optimizer_config = optimizer_config = optimizer_config
         self.linear_attention = linear_attention
+        self.train_query_every = train_query_every
         set_seed(self.initialization_seed)
 
         config = GPT2Config(
@@ -93,7 +95,7 @@ class Transformer(pl.LightningModule):
         next_state_seq = []
         reward_seq = []
         query_locations = []
-        query_every = 10 if seq_len < 1000 else 20
+        query_every = self.train_query_every
         for i in range(seq_len):
             state_seq.append(x['context_states'][:, i, :].unsqueeze(1))
             action_seq.append(x['context_actions'][:, i, :].unsqueeze(1))
@@ -185,7 +187,7 @@ class Transformer(pl.LightningModule):
             raise ValueError("Infs detected in the loss")
 
         self.log(
-            'train_loss', loss/batch_size,
+            'train_loss', loss,
             on_epoch=True, on_step=False, prog_bar=True)
         self.log(
             'train_accuracy', accuracy,
@@ -196,7 +198,7 @@ class Transformer(pl.LightningModule):
         batch_size = batch['query_states'].shape[0]
         loss, accuracy = self.batch_forward(batch, batch_idx)
         self.log(
-            'val_loss', loss/batch_size,
+            'val_loss', loss,
             on_epoch=True, on_step=False, prog_bar=True)
         self.log(
             'val_accuracy', accuracy,

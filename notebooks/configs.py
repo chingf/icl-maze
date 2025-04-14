@@ -74,6 +74,9 @@ def get_model_paths(corr, wandb_project="tree_maze", extra_flags=None):
         env_name = f"cntree_layers7_bprob0.9_corr{corr}_state_dim10_envs600000_H800_explore"
         if corr == 0.25:
             model_name = "transformer_end_query_embd512_layer3_head4_lr0.0001_drop0.2_initseed1_batch512"
+        elif corr == 0.0:
+            #model_name = "transformer_end_query_embd512_layer3_head4_lr0.0001_drop0_initseed1_batch512"
+            model_name = "transformer_end_query_embd512_layer3_head4_lr0.0001_drop0.2_initseed2_batch512"
         else:
             raise ValueError(f"Unknown correlation value: {corr}")
     else:

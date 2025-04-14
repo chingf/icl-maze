@@ -15,4 +15,5 @@ which python
 python --version
 echo $CONDA_DEFAULT_ENV
 
-python eval_offline.py
+python eval_offline_by_query_type.py wandb.project=tree_maze_big_pretraining env.n_envs=600000 model.dropout=0.2 model.initialization_seed=2
+python eval_offline_by_query_type.py wandb.project=tree_maze_big_pretraining env.n_envs=600000 env.node_encoding_corr=0.25 model.dropout=0.2 model.initialization_seed=1

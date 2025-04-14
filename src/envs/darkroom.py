@@ -21,6 +21,8 @@ class DarkroomEnv(BaseEnv):
         self.node_encoding_corr = node_encoding_corr
         self.action_dim = 5  # up, right, down, left, stay
         self.state_dim = state_dim
+        if self.state_dim == 2:
+            print('WARNING: State dim is 2, so defaulting to fixed (x, y) encoding')
 
         if initialization_seed is not None:
             np.random.seed(initialization_seed)
@@ -34,7 +36,11 @@ class DarkroomEnv(BaseEnv):
             if isinstance(goal, np.ndarray) and goal.size == self.state_dim:
                 self.goal = goal
             else:
-                self.goal = np.array(self._find_encoding_by_position(*goal))
+                if isinstance(goal, np.ndarray):
+                    goal = goal.tolist()
+                if isinstance(goal, list):
+                    goal = tuple(goal)
+                self.goal = np.array(self.node_map_pos_to_encoding[goal])
         np.random.seed()
         
         self.optimal_action_map = None
@@ -84,6 +90,8 @@ class DarkroomEnv(BaseEnv):
                 if self.maze[x, y] == 0:
                     continue
                 node_encoding = self._sample_node_encoding(x, y, expansion_mat, dist_mat)
+                if self.state_dim == 2:
+                    node_encoding = (x, y)
                 self.node_map_encoding_to_pos[node_encoding] = (x, y)
                 self.node_map_pos_to_encoding[(x, y)] = node_encoding
 
@@ -94,7 +102,7 @@ class DarkroomEnv(BaseEnv):
         goal_encoding = self.node_map_pos_to_encoding[goal_pos]
         return np.array(goal_encoding)
 
-    def sample_state(self):
+    def sample_state(self, from_origin=False):
         if self.reset_state_bank is not None:
             state = self.reset_state_bank[np.random.choice(len(self.reset_state_bank))]
             return np.array(state)
@@ -116,7 +124,10 @@ class DarkroomEnv(BaseEnv):
         attempts = 0
         while True:
             self.state = self.sample_state()
-            if self.dist_from_goal[tuple(self.state.tolist())] >= (self.maze_dim - 1):
+            if self.reset_state_bank is None:
+                if self.dist_from_goal[tuple(self.state.tolist())] >= (self.maze_dim - 1):
+                    break
+            else:
                 break
             attempts += 1
             if attempts > 200:
@@ -357,7 +368,7 @@ class DarkroomEnvVec(BaseEnv):
             max_rewards = []
             for env in self._envs:
                 dist_from_goal = env.dist_from_goal[tuple(env.state.tolist())]
-                max_rewards.append(self.horizon - dist_from_goal)
+                max_rewards.append(self.horizon - dist_from_goal + 1)
 
         while not done:
             act = ctrl.act(ob)

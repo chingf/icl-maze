@@ -15,6 +15,5 @@ which python
 python --version
 echo $CONDA_DEFAULT_ENV
 
-python make_tree_seeds.py env.node_encoding_corr=0.25 && python collect_data.py env.node_encoding_corr=0.25
-python make_tree_seeds.py env.node_encoding_corr=0.0 && python collect_data.py env.node_encoding_corr=0.0
-#python make_tree_seeds.py env.node_encoding_corr=0 && python collect_data.py env.node_encoding_corr=0
+python collect_data_h5.py
+#python make_tree_seeds.py && python collect_data_h5.py

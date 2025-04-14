@@ -77,8 +77,7 @@ def process_single_env(args):
         'context_rewards': context_rewards,
         'goal': env.goal,
     }
-    if isinstance(env, TreeEnv):
-        traj['initialization_seed'] = env.initialization_seed
+    traj['initialization_seed'] = env.initialization_seed
     return traj
 
 def generate_multiple_histories(env_class, env_configs, rollin_type, from_origin):
@@ -118,26 +117,44 @@ def main(cfg: DictConfig):
     dataset_storage_dir = f'{cfg.storage_dir}/{cfg.wandb.project}/{env_name}/datasets'
     os.makedirs(dataset_storage_dir, exist_ok=True)
 
-    if env_config['env'] == 'darkroom':
-        goals = np.array([[(j, i) for i in range(env_config['dim'])]
-                         for j in range(env_config['dim'])]).reshape(-1, 2)
+    if 'darkroom' in env_config['env']:
         n_envs = env_config['n_envs']
-        dim = env_config['dim']
-        n_repeats = n_envs // (dim * dim)
+        maze_dim = env_config['maze_dim']
+        env_config_keys = ['maze_dim', 'horizon', 'state_dim', 'node_encoding_corr']
 
+        # Get goals for train, test, eval
+        goals = np.array([[(j, i) for i in range(maze_dim)]
+                         for j in range(maze_dim)]).reshape(-1, 2)
+        n_repeats = n_envs // (maze_dim * maze_dim)
         np.random.RandomState(seed=0).shuffle(goals)
-        split_idx_1 = int(.8 * len(goals))
-        split_idx_2 = int(.9 * len(goals))
+        split_idx_1 = -2 * int(.1 * len(goals))
+        split_idx_2 = -1 * int(.1 * len(goals))
         train_goals = goals[:split_idx_1]
         test_goals = goals[split_idx_1:split_idx_2]
         eval_goals = goals[split_idx_2:]
 
+        # Get seeds for train, test, eval
+        split_idx_1 = len(train_goals) * n_repeats
+        split_idx_2 = (len(train_goals) + len(test_goals)) * n_repeats
+        split_idx_3 = (len(train_goals) + len(test_goals) + len(eval_goals)) * n_repeats
+        train_seeds = np.arange(split_idx_1)
+        test_seeds = np.arange(split_idx_1, split_idx_2)
+        eval_seeds = np.arange(split_idx_2, split_idx_3)
+
+        # Create env configs for train, test, eval
         train_env_configs = package_env_configs(
-            env_config, ['dim', 'horizon'], [np.repeat(train_goals, n_repeats, axis=0)], ['goal'])
+            env_config, env_config_keys,
+            [np.tile(train_goals, (n_repeats, 1)), train_seeds],
+            ['goal', 'initialization_seed'])
         test_env_configs = package_env_configs(
-            env_config, ['dim', 'horizon'], [np.repeat(test_goals, n_repeats, axis=0)], ['goal'])
+            env_config, env_config_keys,
+            [np.tile(test_goals, (n_repeats, 1)), test_seeds],
+            ['goal', 'initialization_seed'])
         eval_env_configs = package_env_configs(
-            env_config, ['dim', 'horizon'], [np.repeat(eval_goals, n_repeats, axis=0)], ['goal'])
+            env_config, env_config_keys,
+            [np.tile(eval_goals, (n_repeats, 1)), eval_seeds],
+            ['goal', 'initialization_seed'])
+        
         EnvClass = DarkroomEnv
 
     elif ('tree' in env_config['env']) and (env_config['branching_prob'] == 1.):
