@@ -17,7 +17,6 @@ class Transformer(pl.LightningModule):
         state_dim: int,
         action_dim: int,
         dropout: float,
-        train_on_last_pred_only: bool,
         test: bool,
         name: str,
         initialization_seed: int,
@@ -33,7 +32,6 @@ class Transformer(pl.LightningModule):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.dropout = dropout
-        self.train_on_last_pred_only = train_on_last_pred_only
         self.test = test
         self.initialization_seed = initialization_seed
         self.optimizer_config = optimizer_config = optimizer_config
@@ -143,10 +141,7 @@ class Transformer(pl.LightningModule):
 
         if self.test:
             return preds[:, -1, :]
-        if self.train_on_last_pred_only:
-            indices = torch.tensor([preds.shape[1] - 1]).to(preds.device)
-        else:
-            indices = torch.argwhere(query_locations).squeeze().to(preds.device)
+        indices = torch.argwhere(query_locations).squeeze().to(preds.device)
         preds_subset = torch.index_select(preds, 1, indices)
         return preds_subset
 
@@ -247,7 +242,6 @@ class FixedMemoryTransformer(Transformer):
         state_dim: int,
         action_dim: int,
         dropout: float,
-        train_on_last_pred_only: bool,
         test: bool,
         name: str,
         optimizer_config: dict,
@@ -261,7 +255,6 @@ class FixedMemoryTransformer(Transformer):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.dropout = dropout
-        self.train_on_last_pred_only = train_on_last_pred_only
         self.test = test
         self.optimizer_config = optimizer_config = optimizer_config
 
