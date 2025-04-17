@@ -77,5 +77,41 @@ class SimpleGPT2Model(GPT2Model):
 
 
 class SimpleGPT2Block(GPT2Block):  # Previously overwritten to allow linear attention
+
     def __init__(self, config, layer_idx=None):
-        return super().__init__(config, layer_idx)
+        super().__init__(config, layer_idx=layer_idx)
+        self._additional_attention_mask = None
+
+    def forward(
+        self,
+        hidden_states: Optional[Tuple[torch.FloatTensor]],
+        layer_past: Optional[Tuple[torch.Tensor]] = None,
+        attention_mask: Optional[torch.FloatTensor] = None,
+        head_mask: Optional[torch.FloatTensor] = None,
+        encoder_hidden_states: Optional[torch.Tensor] = None,
+        encoder_attention_mask: Optional[torch.FloatTensor] = None,
+        use_cache: Optional[bool] = False,
+        output_attentions: Optional[bool] = False,
+    ) -> Union[Tuple[torch.Tensor], Optional[Tuple[torch.Tensor, Tuple[torch.FloatTensor, ...]]]]:
+        
+        if self._additional_attention_mask is not None and attention_mask is None:
+            attention_mask = self._additional_attention_mask
+        elif self._additional_attention_mask is not None and attention_mask is not None:
+            if attention_mask.dtype != self._additional_attention_mask.dtype:
+                raise ValueError("Conflicting attention masks")
+        if self._additional_attention_mask is not None and attention_mask is not None:
+            if isinstance(attention_mask, torch.BoolTensor):
+                attention_mask = attention_mask & self._additional_attention_mask
+            else:
+                attention_mask = attention_mask + self._additional_attention_mask
+
+        return super().forward(
+            hidden_states=hidden_states,
+            layer_past=layer_past,
+            attention_mask=attention_mask,
+            head_mask=head_mask,
+            encoder_hidden_states=encoder_hidden_states,
+            encoder_attention_mask=encoder_attention_mask,
+            use_cache=use_cache,
+            output_attentions=output_attentions,
+        )
