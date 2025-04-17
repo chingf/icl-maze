@@ -22,6 +22,7 @@ class Transformer(pl.LightningModule):
         initialization_seed: int,
         optimizer_config: dict,
         train_query_every: int = 10,
+        train_shuffle_memories: bool = False,
         ):
 
         super(Transformer, self).__init__()
@@ -36,6 +37,7 @@ class Transformer(pl.LightningModule):
         self.initialization_seed = initialization_seed
         self.optimizer_config = optimizer_config = optimizer_config
         self.train_query_every = train_query_every
+        self.train_shuffle_memories = train_shuffle_memories
         set_seed(self.initialization_seed)
 
         config = GPT2Config(
@@ -54,17 +56,29 @@ class Transformer(pl.LightningModule):
         self.pred_actions = nn.Linear(self.n_embd, self.action_dim)
         self.loss_fn = nn.CrossEntropyLoss(reduction='sum')
         self.save_activations = False
-        self.pass_query_locations_into_transformer = False
+        self.pass_query_locations_into_transformer = False  # Used for FixedMemoryTransformer
 
     def forward_inference_mode(self, x):
         query_states = x['query_states'][:, None, :]
         zeros = x['zeros'][:, None, :]
-        state_seq = torch.cat([x['context_states'], query_states], dim=1)
+        seq_len = x['context_states'].shape[1]
+        context_states = x['context_states']
+        context_actions = x['context_actions']
+        context_next_states = x['context_next_states']
+        context_rewards = x['context_rewards']
+        if self.train_shuffle_memories:
+            shuffle_idx = torch.randperm(seq_len)
+            context_states = context_states[:, shuffle_idx]
+            context_actions = context_actions[:, shuffle_idx]
+            context_next_states = context_next_states[:, shuffle_idx]
+            context_rewards = context_rewards[:, shuffle_idx]
+
+        state_seq = torch.cat([context_states, query_states], dim=1)
         action_seq = torch.cat(
-            [x['context_actions'], zeros[:, :, :self.action_dim]], dim=1)
+            [context_actions, zeros[:, :, :self.action_dim]], dim=1)
         next_state_seq = torch.cat(
-            [x['context_next_states'], zeros[:, :, :self.state_dim]], dim=1)
-        reward_seq = torch.cat([x['context_rewards'], zeros[:, :, :1]], dim=1)
+            [context_next_states, zeros[:, :, :self.state_dim]], dim=1)
+        reward_seq = torch.cat([context_rewards, zeros[:, :, :1]], dim=1)
         seq = torch.cat(
             [state_seq, action_seq, next_state_seq, reward_seq], dim=2)
         seq_len = seq.shape[1]
@@ -84,6 +98,16 @@ class Transformer(pl.LightningModule):
         query_states = x['query_states'][:, None, :]
         zeros = x['zeros'][:, None, :]
         seq_len = x['context_states'].shape[1]
+        context_states = x['context_states']
+        context_actions = x['context_actions']
+        context_next_states = x['context_next_states']
+        context_rewards = x['context_rewards']
+        if self.train_shuffle_memories:
+            shuffle_idx = torch.randperm(seq_len)
+            context_states = context_states[:, shuffle_idx]
+            context_actions = context_actions[:, shuffle_idx]
+            context_next_states = context_next_states[:, shuffle_idx]
+            context_rewards = context_rewards[:, shuffle_idx]
 
         # Interleave query states with context states
         state_seq = []
@@ -93,10 +117,10 @@ class Transformer(pl.LightningModule):
         query_locations = []
         query_every = self.train_query_every
         for i in range(seq_len):
-            state_seq.append(x['context_states'][:, i, :].unsqueeze(1))
-            action_seq.append(x['context_actions'][:, i, :].unsqueeze(1))
-            next_state_seq.append(x['context_next_states'][:, i, :].unsqueeze(1))
-            reward_seq.append(x['context_rewards'][:, i, :].unsqueeze(1))
+            state_seq.append(context_states[:, i, :].unsqueeze(1))
+            action_seq.append(context_actions[:, i, :].unsqueeze(1))
+            next_state_seq.append(context_next_states[:, i, :].unsqueeze(1))
+            reward_seq.append(context_rewards[:, i, :].unsqueeze(1))
             query_locations.append(0)
             if (i % query_every == 0) or (i == seq_len - 1):
                 state_seq.append(query_states)
