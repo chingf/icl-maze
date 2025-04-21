@@ -1,17 +1,19 @@
+from copy import copy
 import os
 import pickle
 import h5py
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 import torch
-from IPython import embed
-
-from src.evals.eval_darkroom import EvalDarkroom
-from src.evals.eval_trees import EvalTrees, EvalCntrees
+from src.agents.agent import TransformerAgent
+from src.envs.cntrees import CnTreeEnv
+from src.envs.trees import TreeEnv, TreeEnvVec
+from src.envs.darkroom import DarkroomEnv, DarkroomEnvVec
 from src.utils import (
     build_env_name,
     build_model_name,
     build_dataset_name,
+    convert_to_tensor,
     find_ckpt_file,
 )
 import numpy as np
@@ -27,6 +29,121 @@ from pytorch_lightning.loggers import WandbLogger
 wandb.login()
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+def create_env(config):
+    if 'darkroom' in config['env']:
+        _config = {
+            'maze_dim': config['maze_dim'],
+            'horizon': config['horizon'],
+            'state_dim': config['state_dim'],
+            'node_encoding_corr': config['node_encoding_corr'],
+            'initialization_seed': config['initialization_seed'],
+            'goal': config['goal']
+        }
+        return DarkroomEnv(**_config)
+    elif 'tree' in config['env']:
+        _config = {
+            'max_layers': config['max_layers'],
+            'horizon': config['horizon'],
+            'branching_prob': config['branching_prob'],
+            'goal': config['goal'],
+            'initialization_seed': config['initialization_seed']
+            }
+        if 'node_encoding_corr' in config:
+            _config['node_encoding_corr'] = config['node_encoding_corr']
+            _config['state_dim'] = config['state_dim']
+            return CnTreeEnv(**_config)
+        else:
+            _config['node_encoding'] = config['node_encoding']
+            return TreeEnv(**_config)
+    else:
+        raise ValueError(f"Environment {config['env']} not supported.")
+
+def offline(traj, model, config, env):
+    """ Runs each episode separately with offline context. """
+
+    n_eval_envs = config['n_eval_envs']
+    n_eval_episodes = config['offline_eval_episodes']
+    batch = {
+        'context_states': convert_to_tensor([traj['context_states']]),
+        'context_actions': convert_to_tensor([traj['context_actions']]),
+        'context_next_states': convert_to_tensor([traj['context_next_states']]),
+        'context_rewards': convert_to_tensor([traj['context_rewards'][:, None]]),
+        }
+
+    # Load agents
+    epsgreedy_agent = TransformerAgent(model, batch_size=1, sample=True)
+    epsgreedy_agent_2 = TransformerAgent(model, batch_size=1, temp=1, sample=True)
+    greedy_agent = TransformerAgent(model, batch_size=1, sample=False)
+    epsgreedy_agent.set_batch(batch)
+    epsgreedy_agent_2.set_batch(batch)
+    greedy_agent.set_batch(batch)
+
+    # Get unique states from context
+    seen_states = np.vstack((traj['context_states'][:1], traj['context_next_states']))
+    unique_states = np.unique(seen_states, axis=0)  # Get unique states
+    possible_eval_states = []
+    for state in unique_states:
+        state_tuple = tuple(state.tolist())
+        if 'darkroom' in config['env']:
+            dist_threshold = 2
+        elif 'tree' in config['env']:
+            dist_threshold = env.max_layers-1
+        else:
+            raise ValueError(f"Environment {config['env']} not supported.")
+        if env.dist_from_goal[state_tuple] >= dist_threshold:
+            possible_eval_states.append(state_tuple)
+    if len(possible_eval_states) == 0:
+        baselines = {
+            'Learner (temp=2)': 0,
+            'Learner (temp=1)': 0,
+            'Learner (greedy)': 0,
+        }
+        return baselines, None
+
+    # Deploy agents offline
+    env.reset_state_bank = possible_eval_states
+    if isinstance(env, DarkroomEnv):
+        vec_env = DarkroomEnvVec([env])
+    else:
+        vec_env = TreeEnvVec([env])
+    greedy_returns = []
+    epsgreedy_returns = []
+    epsgreedy_returns_2 = []
+    opt_epsgreedy_returns = []
+    opt_epsgreedy_returns_2 = []
+    opt_greedy_returns = []
+
+    for _ in range(n_eval_episodes):
+        _epsgreedy_obs, _, _, _epsgreedy_returns, _opt_returns_epsgreedy = \
+            vec_env.deploy_eval(epsgreedy_agent, return_max_rewards=True)
+        _epsgreedy_obs_2, _, _, _epsgreedy_returns_2, _opt_returns_epsgreedy_2 = \
+            vec_env.deploy_eval(epsgreedy_agent_2, return_max_rewards=True)
+        _greedy_obs, _, _, _greedy_returns, _opt_returns_greedy = \
+            vec_env.deploy_eval(greedy_agent, return_max_rewards=True)
+        epsgreedy_returns.append(np.sum(_epsgreedy_returns))
+        epsgreedy_returns_2.append(np.sum(_epsgreedy_returns_2))
+        greedy_returns.append(np.sum(_greedy_returns))
+        opt_epsgreedy_returns.append(_opt_returns_epsgreedy[0])
+        opt_epsgreedy_returns_2.append(_opt_returns_epsgreedy_2[0])
+        opt_greedy_returns.append(_opt_returns_greedy[0])
+
+    epsgreedy_returns = np.mean(np.array(epsgreedy_returns)/np.array(opt_epsgreedy_returns))
+    epsgreedy_returns_2 = np.mean(np.array(epsgreedy_returns_2)/np.array(opt_epsgreedy_returns_2))
+    greedy_returns = np.mean(np.array(greedy_returns)/np.array(opt_greedy_returns))
+
+    print(f"Epsgreedy returns: {epsgreedy_returns}")
+    print(f"Greedy returns: {greedy_returns}")
+    print()
+
+    # Plot and return
+    baselines = {
+        'Learner (temp=2)': epsgreedy_returns,
+        'Learner (temp=1)': epsgreedy_returns_2,
+        'Learner (greedy)': greedy_returns,
+    }
+
+    return baselines, _epsgreedy_obs
 
 @hydra.main(version_base=None, config_path="configs", config_name="eval")
 def main(cfg: DictConfig):
@@ -97,16 +214,18 @@ def main(cfg: DictConfig):
     print(f'Max context length: {max_context_length}')
 
     # Online and offline evaluation.
-    if env_config['env'] == 'darkroom':
+    if 'darkroom' in env_config['env']:
         config = {
             'online_eval_episodes': cfg.online_eval_episodes,
             'online_eps_in_context': cfg.online_eps_in_context,
             'offline_eval_episodes': cfg.offline_eval_episodes,
             'horizon': cfg.test_horizon,
             'n_eval_envs': n_eval_envs,
-            'dim': env_config['dim'],
+            'maze_dim': env_config['maze_dim'],
+            'state_dim': env_config['state_dim'],
+            'node_encoding_corr': env_config['node_encoding_corr'],
+            'env': env_config['env']
         }
-        eval_func = EvalDarkroom()
     elif env_config['env'] == 'tree':
         config = {
             'online_eval_episodes': cfg.online_eval_episodes,
@@ -116,9 +235,9 @@ def main(cfg: DictConfig):
             'n_eval_envs': n_eval_envs,
             'max_layers': env_config['max_layers'],
             'branching_prob': env_config['branching_prob'],
-            'node_encoding': env_config['node_encoding']
+            'node_encoding': env_config['node_encoding'],
+            'env': env_config['env']
         }
-        eval_func = EvalTrees()
     elif env_config['env'] == 'cntree':
         config = {
             'online_eval_episodes': cfg.online_eval_episodes,
@@ -130,19 +249,11 @@ def main(cfg: DictConfig):
             'branching_prob': env_config['branching_prob'],
             'node_encoding_corr': env_config['node_encoding_corr'],
             'state_dim': env_config['state_dim'],
+            'env': env_config['env']
         }
-        eval_func = EvalCntrees()
+    else:
+        raise ValueError(f"Environment {env_config['env']} not supported.")
 
-
-#    eval_func.continual_online(eval_trajs, model, config)
-#    fig = plt.gcf()
-#    wandb_logger.experiment.log({"continual_online_performance": wandb.Image(fig)}) 
-#    plt.clf()
-#
-#    eval_func.online(eval_trajs, model, config)
-#    fig = plt.gcf()
-#    wandb_logger.experiment.log({"online_performance": wandb.Image(fig)}) 
-#    plt.clf()
 
     # Offline evaluations
     results = {
@@ -152,53 +263,46 @@ def main(cfg: DictConfig):
         'experienced_reward': [],
         'context_length': []
     }
-    context_lengths = np.array([0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 400, 500, 600, 700, 800, 900, 1000])
-    context_lengths_to_visualize = [
-        context_lengths[context_lengths.size//10],
-        context_lengths[context_lengths.size//3],
-        context_lengths[2*(context_lengths.size//3)],
-        context_lengths[-1],
-        ]
-    for _context_length in context_lengths:  # TODO: revert
-        _eval_trajs = []
-        for traj in eval_trajs:  # Generate truncated trajectories
-            _traj = {}
+    if 'darkroom' in env_config['env']:
+        context_lengths = np.arange(0, 250, 10)
+    elif 'tree' in env_config['env']:
+        context_lengths = np.concatenate([
+            np.arange(0, 325, 25),  # 0 to 300 in steps of 25
+            np.arange(400, max_context_length + 100, 100)  # 400 onwards in steps of 100
+        ])
+    else:
+        raise ValueError(f"Environment {env_config['env']} not supported.")
+    for traj_idx, traj in enumerate(eval_trajs):
+        print('Environment: ', traj_idx)
+        env_config = copy(config)
+        env_config['initialization_seed'] = traj['initialization_seed']
+        env_config['goal'] = traj['goal']
+        env = create_env(env_config)
+        env.optimal_action_map, env.dist_from_goal = env.make_opt_action_dict()
+        for context_length in context_lengths:
+            print('Context length: ', context_length)
+            truncated_traj = {}
             for k in traj.keys():
                 if 'context' in k:
-                    val = traj[k][:_context_length]
+                    val = traj[k][:context_length]
                 elif k == 'initialization_seed':
                     val = np.array(traj[k]).item()
                 elif k == 'goal':
                     val = np.array(traj[k])
-                else:  # optimal_action and query_state shouldn't be needed in eval
+                else:
                     val = traj[k]
-                _traj[k] = val
-            _eval_trajs.append(_traj)
-        experienced_rewards = [
-            np.sum(_traj['context_rewards']).item() for _traj in _eval_trajs]
-
-        _returns, _obs, _envs = eval_func.offline(  # Run offline
-            _eval_trajs, model, config, return_envs=True)
-        for model_name, model_returns in _returns.items():
-            model_returns = model_returns.tolist()
-            results['model'].extend([model_name] * n_eval_envs)
-            results['return'].extend(model_returns)
-            results['environment'].extend([i for i in range(n_eval_envs)])
-            results['experienced_reward'].extend(experienced_rewards[:n_eval_envs])
-            results['context_length'].extend([_context_length]*n_eval_envs)
-
-        if _context_length in context_lengths_to_visualize and 'tree' in env_config['env']:
-            if _obs is not None:
-                fig, ax = plt.subplots(figsize=(15, 3))
-                eval_func.plot_trajectory(_obs, _envs, ax)
-                wandb_logger.experiment.log(
-                    {"sample_paths_context_len_{}".format(_context_length): wandb.Image(fig)}) 
-                plt.clf()
+                truncated_traj[k] = val
+            experienced_rewards = np.sum(truncated_traj['context_rewards']).item()
+            returns, obs = offline(truncated_traj, model, env_config, env)
+            for model_name, model_returns in returns.items():
+                results['model'].append(model_name)
+                results['return'].append(model_returns)
+                results['environment'].append(traj_idx)
+                results['experienced_reward'].append(experienced_rewards)
+                results['context_length'].append(context_length)
 
     results = pd.DataFrame(results)
-    opt_return = results[results['model']=='Opt']['return'].mean()
-    results['path_length_scaled'] = (opt_return - results['return'])/opt_return
-    results['returns_scaled'] = results['return']/opt_return
+    results['path_length_scaled'] = 1 - results['return']
 
     ## Save performance given the full context length
     max_ctxt_length_results = results[results['context_length'] == max_context_length]
@@ -214,10 +318,10 @@ def main(cfg: DictConfig):
     ## How does performance vary with context length?
     fig, ax = plt.subplots()
     sns.lineplot(
-        data=results, x='context_length', y='returns_scaled', hue='model',
+        data=results, x='context_length', y='return', hue='model',
         units='environment', estimator=None, ax=ax, alpha=0.2)
     sns.lineplot(
-        data=results, x='context_length', y='returns_scaled', hue='model',
+        data=results, x='context_length', y='return', hue='model',
         ax=ax)
     plt.legend()
     wandb_logger.experiment.log(
@@ -233,7 +337,6 @@ def main(cfg: DictConfig):
     wandb_logger.experiment.log({"offline_pathlen_v_expreward": wandb.Image(fig)}) 
     plt.clf()
 
-    results = results[results['model'] != 'Opt']
     fig, ax = plt.subplots()
     sns.scatterplot(
         data=results, x='experienced_reward', y='path_length_scaled',
@@ -257,7 +360,7 @@ def main(cfg: DictConfig):
     wandb_logger.experiment.log({"offline_pathlen_v_expreward_scatter": wandb.Image(fig)}) 
     plt.clf()
 
-    with open(os.path.join(model_storage_dir, 'eval_results.pkl'), 'wb') as f:
+    with open(os.path.join(model_storage_dir, 'eval_results_offline.pkl'), 'wb') as f:
         pickle.dump(results, f)
 
 if __name__ == '__main__':

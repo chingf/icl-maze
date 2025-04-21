@@ -4,6 +4,8 @@ import h5py
 import random
 import matplotlib.pyplot as plt
 import torch
+from src.envs.cntrees import CnTreeEnv
+from src.envs.trees import TreeEnv
 from src.evals.eval_trees import EvalTrees
 from src.utils import (
     build_env_name,
@@ -18,6 +20,7 @@ import hydra
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 import wandb
+from copy import copy, deepcopy
 wandb.login()
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -31,8 +34,6 @@ def main(cfg: DictConfig):
     model_config['state_dim'] = env_config['state_dim']
     model_config['action_dim'] = env_config['action_dim']
     model_config['optimizer_config'] = optimizer_config
-    if env_config['env'] != 'tree':
-        raise ValueError(f"Environment {env_config['env']} not supported")
 
     # Directory path handling
     env_name = build_env_name(env_config)
@@ -93,22 +94,29 @@ def main(cfg: DictConfig):
         'experienced_reward': [],
         'context_length': []
     }
-    context_lengths = np.linspace(0, max_context_length, 10, dtype=int)
-    context_lengths[0] = 10
+    context_lengths = np.concatenate([
+        np.arange(0, 325, 25),  # 0 to 300 in steps of 25
+        np.arange(400, max_context_length + 100, 100)  # 400 onwards in steps of 100
+    ])
+    print(context_lengths)
     context_lengths_to_visualize = [
         context_lengths[context_lengths.size//10],
         context_lengths[context_lengths.size//3],
         context_lengths[2*(context_lengths.size//3)],
         context_lengths[-1],
     ]
-    for context_length in context_lengths:
-        log_and_visualize = context_length in context_lengths_to_visualize
-        _model_storage_dir = model_storage_dir if context_length == max_context_length else None
-        _results = eval_offline_by_context_length(
-            model_config, env_config, optimizer_config, eval_trajs,
-            context_length, cfg.test_horizon, cfg.n_eval_episodes,
-            log_and_visualize, model_storage_dir=_model_storage_dir)
+    context_lengths[0] = 10
+
+    for i, traj in enumerate(eval_trajs):
+        print(f'...environment {i}')
+        _results = eval_env(
+            model_config, env_config, optimizer_config,
+            traj, i,
+            cfg.test_horizon, cfg.n_eval_episodes, cfg.n_eval_envs, cfg.continual_weights,
+            context_lengths, context_lengths_to_visualize,
+            model_storage_dir)
         results = {k: results[k] + _results[k] for k in results.keys()}
+
 
     ## How does performance vary with context length?
     results = pd.DataFrame(results)
@@ -134,10 +142,30 @@ def main(cfg: DictConfig):
         pickle.dump(results, f)
 
 
-def eval_offline_by_context_length(
-    model_config, env_config, optimizer_config, eval_trajs,
-    context_length, test_horizon, n_eval_episodes, log_and_visualize, model_storage_dir=None):
-    print(f'\nEvaluating context length {context_length}')
+def create_env(config):
+    _config = {
+        'max_layers': config['max_layers'],
+        'horizon': config['horizon'],
+        'branching_prob': config['branching_prob'],
+        'goal': config['goal'],
+        'initialization_seed': config['initialization_seed']
+        }
+    if 'node_encoding_corr' in config:
+        _config['node_encoding_corr'] = config['node_encoding_corr']
+        _config['state_dim'] = config['state_dim']
+        return CnTreeEnv(**_config)
+    else:
+        _config['node_encoding'] = config['node_encoding']
+        return TreeEnv(**_config)
+
+
+def eval_env(
+    model_config, env_config, optimizer_config,
+    traj, env_idx,
+    test_horizon, n_eval_episodes, n_eval_envs, continual_weights,
+    context_lengths, context_lengths_to_visualize,
+    model_storage_dir
+    ):
 
     results = {
         'returns': [],
@@ -145,11 +173,21 @@ def eval_offline_by_context_length(
         'experienced_reward': [],
         'context_length': [],
     }
-    eval_func = EvalTrees()
-    agent_trajectories = [[], []]
+    env_config = copy(env_config)
+    env_config['initialization_seed'] = traj['initialization_seed']
+    env_config['goal'] = traj['goal']
+    env = create_env(env_config)
+    env.optimal_action_map, env.dist_from_goal = env.make_opt_action_dict()
+    env.horizon = test_horizon
 
-    for i, traj in enumerate(eval_trajs):
-        print(f'...environment {i}')
+    set_all_seeds(env_idx)
+    model = instantiate(model_config)
+    if model_config['name'] == 'dqn':
+        model = model.to(device)
+    set_all_seeds()
+
+    for context_length in context_lengths:
+        print(f'\nEvaluating context length {context_length}')
         _traj = {}
         for k in traj.keys():
             if 'context' in k:
@@ -162,36 +200,27 @@ def eval_offline_by_context_length(
                 val = traj[k]
             _traj[k] = val
         experienced_reward = np.sum(_traj['context_rewards']).item()
-        env = eval_func.create_env(env_config, _traj['goal'], i)
-        env.horizon = test_horizon
 
-        set_all_seeds(i)
-        model = instantiate(model_config)
-        if model_config['name'] == 'dqn':
-            model = model.to(device)
-        _log_and_visualize = log_and_visualize and i==0 
+        log_and_visualize = context_length in context_lengths_to_visualize
         _returns, _trajectory, _state_dict = train_and_eval_agent(
             model, env, optimizer_config, _traj, n_eval_episodes,
-            log_and_visualize=_log_and_visualize)
-        set_all_seeds()
+            log_and_visualize=log_and_visualize and (env_idx == 0))
         results['returns'].append(_returns)
-        results['environment'].append(i)
+        results['environment'].append(env_idx)
         results['experienced_reward'].append(experienced_reward)
         results['context_length'].append(context_length)
 
-        if log_and_visualize and i < 3:
-            agent_trajectories[0].append(_trajectory)
-            agent_trajectories[1].append(env)
+        if continual_weights and _state_dict is not None:
+            model.load_state_dict(_state_dict)
+        else:
+            set_all_seeds(env_idx)
+            model = instantiate(model_config)
+            if model_config['name'] == 'dqn':
+                model = model.to(device)
+            set_all_seeds()
 
-        if model_storage_dir is not None:
-            with open(os.path.join(model_storage_dir, f'traj_{i}_state_dict.pkl'), 'wb') as f:
-                pickle.dump(_state_dict, f)
-
-    if log_and_visualize:
-        fig, ax = plt.subplots(figsize=(15, 3))
-        eval_func.plot_trajectory(agent_trajectories[0], agent_trajectories[1], ax)
-        wandb.log({"sample_paths_context_len_{}".format(context_length): wandb.Image(fig)}) 
-        plt.clf()
+    with open(os.path.join(model_storage_dir, f'traj_{env_idx}_state_dict.pkl'), 'wb') as f:
+        pickle.dump(_state_dict, f)
 
     return results
 
@@ -204,15 +233,20 @@ def train_and_eval_agent(
     n_training_samples = model.get_buffer_size()
     n_training_epochs = optimizer_config['num_epochs']
     eval_every = max(1, n_training_epochs // 25)
-    eval_envs = [env.clone() for _ in range(n_eval_episodes)]
 
-    # TODO: debug block
-    all_states = np.vstack([traj['context_states'], traj['context_next_states']])
-    all_states = np.unique(all_states, axis=0).tolist()
+    seen_states = np.vstack((traj['context_states'][:1], traj['context_next_states']))
+    unique_states = np.unique(seen_states, axis=0)  # Get unique states
+    possible_eval_states = []
+    for state in unique_states:
+        state_tuple = tuple(state.tolist())
+        if env.dist_from_goal[state_tuple] >= env.max_layers-1:
+            possible_eval_states.append(state_tuple)
     experienced_reward = np.sum(traj['context_rewards']).item()
     print("rewards experienced: ", experienced_reward)
-    print("Number of seen states: ", len(all_states))
+    print("Number of seen states: ", unique_states.shape[0])
 
+    if len(possible_eval_states) == 0:
+        return 0, None, None
     if log_and_visualize:
         wandb.define_metric("custom_step")
         wandb.define_metric(f"training_loss_H{n_training_samples}", step_metric="custom_step")
@@ -221,6 +255,7 @@ def train_and_eval_agent(
     best_q_loss = float('inf')
     best_q_loss_epoch = None
     best_q_loss_state_dict = None
+    eval_envs = [env.clone() for _ in range(n_eval_episodes)]
     for i in range(n_training_epochs):
         losses = model.training_epoch()
         loss = np.mean(losses)
@@ -258,7 +293,7 @@ def train_and_eval_agent(
         eval_envs, env.horizon)
     epoch_eval_returns = np.mean(epoch_eval_returns)
 
-    print("Eval returns: ", epoch_eval_returns)  # TODO: debug statement
+    print("Eval returns: ", epoch_eval_returns)
 
     return epoch_eval_returns, trajectories[0], best_q_loss_state_dict
 
