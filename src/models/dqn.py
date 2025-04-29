@@ -24,6 +24,7 @@ class DQN(nn.Module):
         optimizer_config: dict,
         name: str,
         buffer_size: int=None,
+        first_hidden_dim: int=256,
     ):
         super(DQN, self).__init__()
 
@@ -36,6 +37,7 @@ class DQN(nn.Module):
         self.target_update = target_update
         self.memory = deque(maxlen=buffer_size)
         self.training_epochs_done = 0
+        self.first_hidden_dim = first_hidden_dim
 
         self.q_network = self.make_mlp()
         self.target_network = self.make_mlp()
@@ -49,7 +51,7 @@ class DQN(nn.Module):
         in_dim = self.state_dim
         for layer in range(self.n_layers):
             if layer == 0:
-                hidden_dim = 256
+                hidden_dim = self.first_hidden_dim
             else:
                 hidden_dim = max(in_dim//2, 16)
             layers.append(nn.Linear(in_dim, hidden_dim))
@@ -74,18 +76,22 @@ class DQN(nn.Module):
                     activations.append(x.detach().cpu().numpy())
             return x, activations
 
-    def select_action(self, state):
+    def select_action(self, state, action_temp=None):
+        if action_temp is None:
+            action_temp = self.action_temp
         with torch.no_grad():
             q_values = self.q_network(state)
-            probs = torch.softmax(q_values/self.action_temp, dim=-1)
+            probs = torch.softmax(q_values/action_temp, dim=-1)
             action = torch.multinomial(probs, 1)
         return action
         
-    def select_action_vec(self, states):
+    def select_action_vec(self, states, action_temp=None):
+        if action_temp is None:
+            action_temp = self.action_temp
         state_batch = torch.stack(states)
         with torch.no_grad():
             q_values = self.q_network(state_batch)
-            probs = torch.softmax(q_values/self.action_temp, dim=-1)
+            probs = torch.softmax(q_values/action_temp, dim=-1)
             actions = torch.multinomial(probs, 1).squeeze(-1)
         return actions
 
@@ -141,16 +147,18 @@ class DQN(nn.Module):
         for key in readable_q_table.keys():
             print(f'{key}: {readable_q_table[key]}')
 
-    def deploy(self, env, horizon, debug=False):
+    def deploy(self, env, horizon, debug=False, max_normalize=False, action_temp=None):
         if debug:
             import pdb; pdb.set_trace()
         with torch.no_grad():
-            state = torch.tensor(env.reset(), device=self.device, dtype=torch.float32)
+            state = env.reset()
+            dist_from_goal = env.dist_from_goal[tuple(state.tolist())]
+            state = torch.tensor(state, device=self.device, dtype=torch.float32)
             returns = 0
             trajectory = []
             
             for t in range(horizon):
-                action = self.select_action(state)
+                action = self.select_action(state, action_temp)
                 action_array = np.zeros(self.action_dim)
                 action_array[action.item()] = 1
                 next_state, reward, done, _ = env.step(action_array)
@@ -163,26 +171,30 @@ class DQN(nn.Module):
                 returns += reward
                 trajectory.append(state.cpu().numpy())
                 state = torch.tensor(next_state, device=self.device, dtype=torch.float32)
-            return returns, trajectory
+        if max_normalize:
+            returns = returns / (horizon-dist_from_goal+1)
+        return returns, trajectory
 
-    def deploy_vec(self, envs, horizon):
+    def deploy_vec(self, envs, horizon, max_normalize=False, action_temp=None):
         num_envs = len(envs)
         returns = np.zeros(num_envs)
         trajectories = [[] for _ in range(num_envs)]
-        states = [torch.tensor(env.reset(), device=self.device, dtype=torch.float32) for env in envs]
+        states = [env.reset() for env in envs]
+        dist_from_goals = [envs[i].dist_from_goal[tuple(states[i].tolist())] for i in range(num_envs)]
+        states = [torch.tensor(state, device=self.device, dtype=torch.float32) for state in states]
         
         with torch.no_grad():
             for t in range(horizon):
-                actions = self.select_action_vec(states)
+                actions = self.select_action_vec(states, action_temp)
                 for i, env in enumerate(envs):
                     action_array = np.zeros(self.action_dim)
                     action_array[actions[i]] = 1
                     next_state, reward, done, _ = env.step(action_array)
-                    
                     returns[i] += reward
                     trajectories[i].append(states[i].cpu().numpy())
                     states[i] = torch.tensor(next_state, device=self.device, dtype=torch.float32)
-        
+        if max_normalize:
+            returns = [returns[i] / (horizon-dist_from_goals[i]+1) for i in range(num_envs)]
         return returns, trajectories
 
 

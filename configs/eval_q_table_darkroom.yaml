@@ -1,0 +1,17 @@
+defaults:
+  - model: q_table
+  - env: darkroom
+  - optimizer: q_table
+  - _self_
+
+wandb:
+  project: darkroom_qlearning
+
+continual_weights: false
+n_eval_envs: 50 # (~per-mouse, each environment contains a different interaction history)
+test_horizon: 15  # (horizon for each evaluation episode)
+n_eval_episodes: 20 # (per environment)
+storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
+
+override_eval_dataset_path: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/darkroom_simple/darkroom_dim5_corr0.25_state_dim10_envs900000_H200_explore/datasets/eval.pkl
+override_params: {}

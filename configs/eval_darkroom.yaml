@@ -10,25 +10,20 @@ model:
   n_layer: 3
   dropout: 0.
 
-env:
-  node_encoding_corr: 0.25
-  maze_dim: 8
-  horizon: 250
-
 optimizer:
-  batch_size: 512
+  batch_size: 1024
   num_epochs: 25
+  lr: 0.0001
 
 wandb:
   project: darkroom_simple 
 
 seed: 0
 epoch: best
-n_eval_envs: 10 # (~per-mouse, each environment contains a different interaction history)
+n_eval_envs: 50 # (~per-mouse, each environment contains a different interaction history)
 test_horizon: 15  # (horizon for each evaluation episode)
-
 # Eval-specific parameters
-offline_eval_episodes: 10 # (per environment)  # TODO
+offline_eval_episodes: 20 # (per environment)  # TODO
 online_eps_in_context: 1 # (number of episodes to keep in context)
 online_eval_episodes: 40 # (number of sequential episodes to run)
 

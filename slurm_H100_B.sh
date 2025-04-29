@@ -15,5 +15,6 @@ which python
 python --version
 echo $CONDA_DEFAULT_ENV
 
-python train.py --config-name=training_darkroom
+python train.py --config-name=training_darkroom model.initialization_seed=3
+python train.py --config-name=training_darkroom model.initialization_seed=4
 

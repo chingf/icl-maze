@@ -4,8 +4,15 @@ defaults:
   - optimizer: default
   - _self_
 
+env:
+  node_encoding_corr: 0.25
+
+model:
+  train_shuffle_memories: true
+  initialization_seed: 4
+
 wandb:
-  project: tree_maze_bigger_models
+  project: tree_maze_memory_shuffle
 
 storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
 #override_dataset_dir: null

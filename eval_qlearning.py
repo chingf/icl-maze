@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import torch
 from src.envs.cntrees import CnTreeEnv
 from src.envs.trees import TreeEnv
+from src.envs.darkroom import DarkroomEnv, DarkroomEnvVec
 from src.evals.eval_trees import EvalTrees
 from src.utils import (
     build_env_name,
@@ -24,6 +25,37 @@ from copy import copy, deepcopy
 wandb.login()
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+action_temps = [10.0, 0.005, 0.01, 0.05, 0.1, 0.2, 0.5]
+
+def create_env(config):
+    if 'darkroom' in config['env']:
+        _config = {
+            'maze_dim': config['maze_dim'],
+            'horizon': config['horizon'],
+            'state_dim': config['state_dim'],
+            'node_encoding_corr': config['node_encoding_corr'],
+            'initialization_seed': config['initialization_seed'],
+            'goal': config['goal']
+        }
+        return DarkroomEnv(**_config)
+    elif 'tree' in config['env']:
+        _config = {
+            'max_layers': config['max_layers'],
+            'horizon': config['horizon'],
+            'branching_prob': config['branching_prob'],
+            'goal': config['goal'],
+            'initialization_seed': config['initialization_seed']
+            }
+        if 'node_encoding_corr' in config:
+            _config['node_encoding_corr'] = config['node_encoding_corr']
+            _config['state_dim'] = config['state_dim']
+            return CnTreeEnv(**_config)
+        else:
+            _config['node_encoding'] = config['node_encoding']
+            return TreeEnv(**_config)
+    else:
+        raise ValueError(f"Environment {config['env']} not supported.")
+
 
 @hydra.main(version_base=None, config_path="configs", config_name="eval_dqn")
 def main(cfg: DictConfig):
@@ -92,20 +124,25 @@ def main(cfg: DictConfig):
         'returns': [],
         'environment': [],
         'experienced_reward': [],
-        'context_length': []
+        'context_length': [],
+        'action_temps': [],
     }
-    context_lengths = np.concatenate([
-        np.arange(0, 325, 25),  # 0 to 300 in steps of 25
-        np.arange(400, max_context_length + 100, 100)  # 400 onwards in steps of 100
-    ])
-    print(context_lengths)
+    if 'darkroom' in env_config['env']:
+        context_lengths = np.arange(10, 250, 10)
+    elif 'tree' in env_config['env']:
+        context_lengths = np.concatenate([
+            np.arange(0, 325, 25),  # 0 to 300 in steps of 25
+            np.arange(400, max_context_length + 100, 100)  # 400 onwards in steps of 100
+        ])
+        context_lengths[0] = 10
+    else:
+        raise ValueError(f"Environment {env_config['env']} not supported.")
     context_lengths_to_visualize = [
         context_lengths[context_lengths.size//10],
         context_lengths[context_lengths.size//3],
         context_lengths[2*(context_lengths.size//3)],
         context_lengths[-1],
     ]
-    context_lengths[0] = 10
 
     for i, traj in enumerate(eval_trajs):
         print(f'...environment {i}')
@@ -141,24 +178,6 @@ def main(cfg: DictConfig):
     with open(os.path.join(model_storage_dir, 'eval_results.pkl'), 'wb') as f:
         pickle.dump(results, f)
 
-
-def create_env(config):
-    _config = {
-        'max_layers': config['max_layers'],
-        'horizon': config['horizon'],
-        'branching_prob': config['branching_prob'],
-        'goal': config['goal'],
-        'initialization_seed': config['initialization_seed']
-        }
-    if 'node_encoding_corr' in config:
-        _config['node_encoding_corr'] = config['node_encoding_corr']
-        _config['state_dim'] = config['state_dim']
-        return CnTreeEnv(**_config)
-    else:
-        _config['node_encoding'] = config['node_encoding']
-        return TreeEnv(**_config)
-
-
 def eval_env(
     model_config, env_config, optimizer_config,
     traj, env_idx,
@@ -172,6 +191,7 @@ def eval_env(
         'environment': [],
         'experienced_reward': [],
         'context_length': [],
+        'action_temps': [],
     }
     env_config = copy(env_config)
     env_config['initialization_seed'] = traj['initialization_seed']
@@ -200,15 +220,15 @@ def eval_env(
                 val = traj[k]
             _traj[k] = val
         experienced_reward = np.sum(_traj['context_rewards']).item()
-
         log_and_visualize = context_length in context_lengths_to_visualize
-        _returns, _trajectory, _state_dict = train_and_eval_agent(
+        _returns, _trajectories, _action_temps, _state_dict = train_and_eval_agent(
             model, env, optimizer_config, _traj, n_eval_episodes,
             log_and_visualize=log_and_visualize and (env_idx == 0))
-        results['returns'].append(_returns)
-        results['environment'].append(env_idx)
-        results['experienced_reward'].append(experienced_reward)
-        results['context_length'].append(context_length)
+        results['returns'].extend(_returns)
+        results['action_temps'].extend(_action_temps)
+        results['environment'].extend([env_idx] * len(_returns))
+        results['experienced_reward'].extend([experienced_reward] * len(_returns))
+        results['context_length'].extend([context_length] * len(_returns))
 
         if continual_weights and _state_dict is not None:
             model.load_state_dict(_state_dict)
@@ -228,18 +248,23 @@ def eval_env(
 def train_and_eval_agent(
         model, env, optimizer_config, traj, n_eval_episodes,
         log_and_visualize=False, debug=False):
-    eval_func = EvalTrees()
     model.store_transition_from_dict(traj)
     n_training_samples = model.get_buffer_size()
     n_training_epochs = optimizer_config['num_epochs']
-    eval_every = max(1, n_training_epochs // 25)
+    eval_every = max(1, n_training_epochs // 5)
 
     seen_states = np.vstack((traj['context_states'][:1], traj['context_next_states']))
     unique_states = np.unique(seen_states, axis=0)  # Get unique states
     possible_eval_states = []
     for state in unique_states:
         state_tuple = tuple(state.tolist())
-        if env.dist_from_goal[state_tuple] >= env.max_layers-1:
+        if isinstance(env, DarkroomEnv):
+            dist_threshold = 2
+        elif isinstance(env, CnTreeEnv):
+            dist_threshold = env.max_layers-1
+        else:
+            raise ValueError(f"Environment not supported.")
+        if env.dist_from_goal[state_tuple] >= dist_threshold:
             possible_eval_states.append(state_tuple)
     experienced_reward = np.sum(traj['context_rewards']).item()
     print("rewards experienced: ", experienced_reward)
@@ -262,7 +287,7 @@ def train_and_eval_agent(
         if log_and_visualize:
             wandb.log({f"training_loss_H{n_training_samples}": loss, "custom_step": i})
         if (i % eval_every == 0) or (i == n_training_epochs - 1):
-            epoch_eval_returns, _ = model.deploy_vec(eval_envs, env.horizon)
+            epoch_eval_returns, _ = model.deploy_vec(eval_envs, env.horizon, max_normalize=True)
             epoch_eval_returns = np.mean(epoch_eval_returns)
 
             if log_and_visualize:
@@ -271,13 +296,9 @@ def train_and_eval_agent(
                 epoch_eval_returns = []
                 for _ in range(n_eval_episodes):
                     _epoch_returns, _trajectory = model.deploy(
-                        env, horizon=env.horizon, debug=True)
+                        env, horizon=env.horizon, debug=True, max_normalize=True)
                     epoch_eval_returns.append(_epoch_returns)
                 epoch_eval_returns = np.mean(epoch_eval_returns)
-                fig, ax = plt.subplots(figsize=(15, 3))
-                eval_func.plot_trajectory([_trajectory]*3, [env]*3, ax)
-                wandb.log({"debug_paths": wandb.Image(fig)}) 
-                plt.clf()
 
         # Save the model checkpoint if it's the best so far
         if loss < best_q_loss:
@@ -289,13 +310,18 @@ def train_and_eval_agent(
     print_str += f"from epoch {best_q_loss_epoch} with loss {best_q_loss}."
     print(print_str)
     model.load_state_dict(best_q_loss_state_dict)
-    epoch_eval_returns, trajectories = model.deploy_vec(
-        eval_envs, env.horizon)
-    epoch_eval_returns = np.mean(epoch_eval_returns)
+    returns = []
+    trajectories = []
+    for action_temp in action_temps:
+        print(action_temp)
+        _returns, _trajectories = model.deploy_vec(
+            eval_envs, env.horizon, max_normalize=True, action_temp=action_temp)
+        returns.append(np.mean(_returns))
+        trajectories.append(_trajectories[0])
 
-    print("Eval returns: ", epoch_eval_returns)
+    print("Eval returns: ", returns)
 
-    return epoch_eval_returns, trajectories[0], best_q_loss_state_dict
+    return returns, trajectories, action_temps, best_q_loss_state_dict
 
 
 if __name__ == '__main__':

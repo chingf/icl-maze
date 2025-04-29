@@ -34,15 +34,19 @@ class TabularQLearning:
     def get_buffer_size(self):
             return len(self.memory)
 
-    def select_action(self, state, greedy=False):
+    def select_action(self, state, greedy=False, action_temp=None):
+        if action_temp is None:
+            action_temp = self.action_temp
         state_key = self.get_state_key(state)
         q_values = self.q_table[state_key]
-        probs = softmax(q_values/self.action_temp)
+        probs = softmax(q_values/action_temp)
         action = np.random.choice(np.arange(self.action_dim), p=probs)
         return action
     
-    def select_action_vec(self, states):
-        actions = [self.select_action(state) for state in states]
+    def select_action_vec(self, states, action_temp=None):
+        if action_temp is None:
+            action_temp = self.action_temp
+        actions = [self.select_action(state, action_temp=action_temp) for state in states]
         return actions
     
     def store_transition_from_dict(self, traj_dict):
@@ -96,13 +100,14 @@ class TabularQLearning:
         for key in readable_q_table.keys():
             print(f'{key}: {readable_q_table[key]}')
 
-    def deploy(self, env, horizon, debug=False):
+    def deploy(self, env, horizon, debug=False, max_normalize=False, action_temp=None):
         state = env.reset()
+        dist_from_goal = env.dist_from_goal[tuple(state.tolist())]
         returns = 0
         trajectory = []
 
         for t in range(horizon):
-            action = self.select_action(state, greedy=True)
+            action = self.select_action(state, greedy=True, action_temp=action_temp)
             action_vec = np.zeros(self.action_dim)
             action_vec[action] = 1
             next_state, reward, done, _ = env.step(action_vec)
@@ -117,26 +122,28 @@ class TabularQLearning:
             state = next_state
             if done:
                 break
-
+        if max_normalize:
+            returns = returns / (horizon-dist_from_goal+1)
         return returns, trajectory
 
-    def deploy_vec(self, envs, horizon):
+    def deploy_vec(self, envs, horizon, max_normalize=False, action_temp=None):
         num_envs = len(envs)
         returns = np.zeros(num_envs)
         trajectories = [[] for _ in range(num_envs)]
         states = [env.reset() for env in envs]
+        dist_from_goals = [envs[i].dist_from_goal[tuple(states[i].tolist())] for i in range(num_envs)]
         
         for t in range(horizon):
-            actions = self.select_action_vec(states)
+            actions = self.select_action_vec(states, action_temp)
             for i, env in enumerate(envs):
                 action_array = np.zeros(self.action_dim)
                 action_array[actions[i]] = 1
                 next_state, reward, done, _ = env.step(action_array)
-                
                 returns[i] += reward
                 trajectories[i].append(states[i])
                 states[i] = next_state
-        
+        if max_normalize:
+            returns = [returns[i] / (horizon-dist_from_goals[i]+1) for i in range(num_envs)]
         return returns, trajectories
 
     def training_epoch(self):

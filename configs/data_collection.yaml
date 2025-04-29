@@ -7,13 +7,13 @@ defaults:
 #  branching_prob: 1.0  # To make test dataset
 #  horizon: 1600  # To make test dataset
 
-env:
-  node_encoding_corr: 0.0
-  n_envs: 600000
+#env:
+#  node_encoding_corr: 0.0
+#  n_envs: 600000
 
 from_origin: True
 
 wandb:
-  project: tree_maze_big_pretraining
+  project: tree_maze
 
 storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze

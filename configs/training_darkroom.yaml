@@ -5,19 +5,15 @@ defaults:
   - _self_
 
 model:
-  train_query_every: 10
+  train_query_every: 5
   n_embd: 512
-  n_layer: 4
+  n_layer: 3
   dropout: 0.
 
-env:
-  node_encoding_corr: 0.25
-  maze_dim: 8
-  horizon: 250
-
 optimizer:
-  batch_size: 512
+  batch_size: 1024
   num_epochs: 25
+  lr: 0.0001
 
 wandb:
   project: darkroom_simple 
