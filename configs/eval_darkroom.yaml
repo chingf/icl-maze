@@ -8,7 +8,8 @@ model:
   train_query_every: 5
   n_embd: 512
   n_layer: 3
-  dropout: 0.
+  dropout: 0.0
+  initialization_seed: 2
 
 optimizer:
   batch_size: 1024

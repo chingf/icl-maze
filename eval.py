@@ -49,13 +49,9 @@ def create_env(config):
             'goal': config['goal'],
             'initialization_seed': config['initialization_seed']
             }
-        if 'node_encoding_corr' in config:
-            _config['node_encoding_corr'] = config['node_encoding_corr']
-            _config['state_dim'] = config['state_dim']
-            return CnTreeEnv(**_config)
-        else:
-            _config['node_encoding'] = config['node_encoding']
-            return TreeEnv(**_config)
+        _config['node_encoding_corr'] = config['node_encoding_corr']
+        _config['state_dim'] = config['state_dim']
+        return CnTreeEnv(**_config)
     else:
         raise ValueError(f"Environment {config['env']} not supported.")
 
@@ -83,14 +79,14 @@ def offline(traj, model, config, env):
     seen_states = np.vstack((traj['context_states'][:1], traj['context_next_states']))
     unique_states = np.unique(seen_states, axis=0)  # Get unique states
     possible_eval_states = []
+    if 'darkroom' in config['env']:
+        dist_threshold = 2
+    elif 'tree' in config['env']:
+        dist_threshold = env.max_layers-1
+    else:
+        raise ValueError(f"Environment {config['env']} not supported.")
     for state in unique_states:
         state_tuple = tuple(state.tolist())
-        if 'darkroom' in config['env']:
-            dist_threshold = 2
-        elif 'tree' in config['env']:
-            dist_threshold = env.max_layers-1
-        else:
-            raise ValueError(f"Environment {config['env']} not supported.")
         if env.dist_from_goal[state_tuple] >= dist_threshold:
             possible_eval_states.append(state_tuple)
     if len(possible_eval_states) == 0:

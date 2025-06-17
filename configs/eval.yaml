@@ -7,17 +7,14 @@ defaults:
 wandb:
   project: tree_maze
 
-env:
-  node_encoding_corr: 0.
-
 model:
-  dropout: 0
+  dropout: 0.2
   initialization_seed: 4
 
 seed: 0
 epoch: best
-n_eval_envs: 30 # (~per-mouse, each environment contains a different interaction history)
-test_horizon: 400  # (horizon for each evaluation episode)
+n_eval_envs: 50 # (~per-mouse, each environment contains a different interaction history)
+test_horizon: 100  # (horizon for each evaluation episode)
 
 # Eval-specific parameters
 offline_eval_episodes: 20 # (per environment)  # TODO

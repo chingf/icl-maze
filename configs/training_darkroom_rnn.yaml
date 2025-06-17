@@ -1,0 +1,22 @@
+defaults:
+  - model: rnn 
+  - env: darkroom
+  - optimizer: default
+  - _self_
+
+env:
+  node_encoding_corr: 0.0
+
+model:
+  train_query_every: 5
+
+optimizer:
+  batch_size: 2048
+  num_epochs: 100
+  lr: 0.0001
+
+wandb:
+  project: darkroom_rnn
+
+storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
+override_dataset_dir: darkroom_simple 

@@ -4,6 +4,9 @@ defaults:
   - optimizer: default
   - _self_
 
+env:
+  node_encoding_corr: 0.0
+
 model:
   train_query_every: 5
   n_embd: 512

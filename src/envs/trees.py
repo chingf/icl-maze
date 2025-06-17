@@ -446,7 +446,7 @@ class TreeEnvVec(BaseEnv):
             max_rewards = []
             for env in self._envs:
                 dist_from_goal = env.dist_from_goal[tuple(env.state.tolist())]
-                max_rewards.append(self.horizon - dist_from_goal)
+                max_rewards.append(self.horizon - dist_from_goal + 1)
 
         while not done:
             act = ctrl.act(ob)

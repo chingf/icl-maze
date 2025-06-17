@@ -15,4 +15,4 @@ which python
 python --version
 echo $CONDA_DEFAULT_ENV
 
-python eval_qlearning.py --config-name=eval_dqn_darkroom model.gamma=0.7
+python eval_qlearning_by_query_type.py --config-name=eval_dqn

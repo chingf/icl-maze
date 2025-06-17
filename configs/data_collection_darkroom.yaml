@@ -3,14 +3,7 @@ defaults:
   - _self_
 
 env:
-  node_encoding_corr: 0.25
-  maze_dim: 6
-  horizon: 300
-
-#env:
-#  env: darkroom_fixedxy
-#  state_dim: 2
-#  maze_dim: 8
+  node_encoding_corr: 0.0
 
 wandb:
   project: darkroom_simple

@@ -23,6 +23,7 @@ class RNN(pl.LightningModule):
         name: str,
         optimizer_config: dict,
         initialization_seed: int,
+        train_query_every: int=10,
         ):
 
         super(RNN, self).__init__()
@@ -35,6 +36,7 @@ class RNN(pl.LightningModule):
         self.test = test
         self.optimizer_config = optimizer_config = optimizer_config
         self.initialization_seed = initialization_seed
+        self.train_query_every = train_query_every
         set_seed(self.initialization_seed)
 
         print(f"LSTM Dropout: {self.dropout}")
@@ -72,7 +74,7 @@ class RNN(pl.LightningModule):
         # Prepare query
         query = torch.cat([query_states, zeros[:,:,:self.action_dim+self.state_dim+1]], dim=2)
         query = self.embed_transition(query)
-        query_every = 10 if seq_len < 1000 else 20
+        query_every = self.train_query_every
 
         # Run through RNN
         rnn_hidden = None

@@ -14,8 +14,8 @@ wandb:
   project: tree_maze_qlearning
 
 continual_weights: false
-n_eval_envs: 30 # (~per-mouse, each environment contains a different interaction history)
-test_horizon: 400  # (horizon for each evaluation episode)
+n_eval_envs: 50 # (~per-mouse, each environment contains a different interaction history)
+test_horizon: 100  # (horizon for each evaluation episode)
 n_eval_episodes: 20 # (per environment)
 storage_dir: /n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze
 

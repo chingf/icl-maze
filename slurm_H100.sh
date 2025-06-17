@@ -16,9 +16,7 @@ python --version
 echo $CONDA_DEFAULT_ENV
 
 #python train.py --config-name=training_darkroom
-python train.py --config-name=training_darkroom model.initialization_seed=1
-python train.py --config-name=training_darkroom model.initialization_seed=2
-
+python train.py --config-name=training_darkroom model.initialization_seed=0
 #python train.py env.node_encoding_corr=0.25 model.n_layer=6 model.dropout=0.2 optimizer.batch_size=256
 
 #python train.py wandb.project=from_middle override_dataset_dir=null 

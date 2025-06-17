@@ -2,5 +2,5 @@ _target_: src.models.dqn.DQN
 name: dqn
 n_layers: 4
 gamma: 0.9
-action_temp: 0.1  # default, but the eval script will sweep over a range of action temps
+action_temp: 0.01  # default, but the eval script will sweep over a range of action temps
 target_update: 10

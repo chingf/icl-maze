@@ -1,5 +1,6 @@
 pickles/
 figs/
+figs_app/
 icl_maze.egg-info/
 *.out
 multirun/

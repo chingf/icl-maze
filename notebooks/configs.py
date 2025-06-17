@@ -45,15 +45,19 @@ sns.set(
 
 import matplotlib.pyplot as plt
 plt.rcParams['font.family'] = 'sans-serif'
-plt.rcParams['font.sans-serif'] = ['DejaVu Sans'] + plt.rcParams['font.sans-serif']
+plt.rcParams['font.sans-serif'] = ['Arial', 'DejaVu Sans'] + plt.rcParams['font.sans-serif']
 
 def get_model_paths(corr, wandb_project="tree_maze", extra_flags=None):
     engram_dir = "/n/holylfs06/LABS/krajan_lab/Lab/cfang/icl-maze/"
     env_name = f"cntree_layers7_bprob0.9_corr{corr}_state_dim10_envs300000_H800_explore"
     if wandb_project == "tree_maze":
         if corr == 0.25:
-            model_name = "transformer_end_query_embd512_layer3_head4_lr0.0001_drop0.2_initseed1_batch512"
-            #model_name = "transformer_end_query_embd512_layer3_head4_lr0.0001_drop0_initseed4_batch512"
+            if extra_flags is None:
+                model_name = "transformer_end_query_embd512_layer3_head4_lr0.0001_drop0.2_initseed4_batch512"
+            elif extra_flags == "lower_lr":
+                model_name = "transformer_end_query_embd512_layer4_head4_lr1e-05_drop0_initseed2_batch512_nosched"
+            else:
+                raise ValueError(f"Unknown extra flags: {extra_flags}")
         elif corr == 0.0:
             model_name = "transformer_end_query_embd512_layer3_head4_lr0.0001_drop0_initseed0_batch512"
         else:
@@ -65,7 +69,7 @@ def get_model_paths(corr, wandb_project="tree_maze", extra_flags=None):
             elif extra_flags == 'layer4':
                 model_name = "transformer_end_query_embd1024_layer4_head4_lr0.0001_drop0_initseed3_batch128"
             elif extra_flags == "layer6":
-                model_name = f"transformer_end_query_embd512_layer6_head4_lr0.0001_drop0_initseed2_batch256"
+                model_name = f"transformer_end_query_embd512_layer6_head4_lr0.0001_drop0.2_initseed2_batch256"
             else:
                 raise ValueError(f"Unknown extra flags: {extra_flags}")
         else:
